@@ -1,0 +1,149 @@
+{
+  "Humanoids": [
+    {
+    "Races": [
+      "Default"
+    ],
+    "Breathe" : "_WetBreathAO",
+    "BreatheFast" : "_WetBreathFastVE",
+    "BreatheFrigid" : "_WetBreathFrigidVE",
+    "TempFrequency" : 2.4
+  },
+  {
+    "Races": [
+    "ArgonianRace"
+  ],
+  "Breathe" : "_WetBreathArtAO",
+  "BreatheFast" : "_WetBreathFastArgVE",
+  "BreatheFrigid" : "_WetBreathFrigidArgVE",
+  "TempFrequency" : 2.4
+  },
+  {
+    "Races": [
+    "KhajiitRace"
+  ],
+  "Breathe" : "_WetBreathKhajAO",
+  "BreatheFast" : "_WetBreathFastKhajVE",
+  "BreatheFrigid" : "_WetBreathFrigidKhajVE",
+  "TempFrequency" : 2.4
+  }
+],
+  "Creatures": [
+    {
+      "Races": [
+        "HorseRace"
+      ],
+      "Breathe" : "_WetBreathHorseLVE",
+      "BreathTwo" : "_WetBreathHorseRVE",
+      "TempFrequency" : 3.6
+    },
+    {
+      "Races": [
+        "DogRace",
+        "DogCompanionRace",
+        "WolfRace",
+        "DA03BarbasDogRace",
+        "MG07DogRace",
+        "DGHuskies"
+      ],
+      "Breathe" : "_WetBreathCanineVE",
+      "TempFrequency" : 1.2
+    },
+    {
+      "Races": [
+        "GiantRace",
+        "C00GiantOutsideWhiterunRace"
+      ],
+      "Breathe" : "_WetBreathGiantVE",
+      "TempFrequency" : 2.5
+    },
+    {
+      "Races": [
+        "BearBlackRace",
+        "BearBrownRace",
+        "BearSnowRace"
+      ],
+      "Breathe" : "_WetBreathBearVE",
+      "TempFrequency" : 2.15
+    },
+    {
+      "Races": [
+        "SabreCatRace",
+        "SabreCatSnowyRace",
+        "BearSnowRace",
+        "DGCat"
+      ],
+      "Breathe" : "_WetBreathSabreVE",
+      "TempFrequency" : 1.3
+    },
+    {
+      "Races": [
+        "FalmerRace"
+      ],
+      "Breathe" : "_WetBreathFalmerVE",
+      "TempFrequency" : 1.3
+    },
+    {
+      "Races": [
+        "WerewolfBeastRace",
+        "DBWerebear"
+      ],
+      "Breathe" : "_WetBreath_WerewolfVE",
+      "TempFrequency" : 1.9
+    },
+    {
+      "Races": [
+        "DragonRace",
+        "DBDragon"
+      ],
+      "Breathe" : "_WetBreathDragonRVE",
+      "BreathTwo" : "_WetBreathDragonLVE",
+      "TempFrequency" : 3.55
+    },
+    {
+      "Races": [
+        "CowRace"
+      ],
+      "Breathe" : "_WetBreathCowRVE",
+      "BreathTwo" : "_WetBreathCowLVE",
+      "TempFrequency" : 3.4
+    },
+    {
+      "Races": [
+        "HagravenRace"
+      ],
+      "Breathe" : "_WetBreathHagravenVE",
+      "TempFrequency" : 1.5
+    },
+    {
+      "Races": [
+        "DBDragon"
+      ],
+      "Breathe" : "_WetBreathHagravenVE",
+      "TempFrequency" : 1.5
+    },
+    {
+      "Races": [
+        "DBLurker"
+      ],
+      "Breathe" : "_WetBreathLurkerVE",
+      "TempFrequency" : 2.3
+    },
+    {
+      "Races": [
+        "DBBoar",
+        "DBMountedRiek"
+      ],
+      "Breathe" : "_WetBreathBoarVE",
+      "TempFrequency" : 1.4
+    },
+    {
+      "Races": [
+        "DBRiek",
+        "DBThirskRiek"
+      ],
+      "Breathe" : "_WetBreathRiekVE",
+      "TempFrequency" : 1.2
+    }
+  ]
+}
