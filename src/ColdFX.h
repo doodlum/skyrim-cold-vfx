@@ -18,7 +18,6 @@ public:
 		return &avInterface;
 	}
 
-
 	RE::BGSListForm* Survival_AshWeather;
 	RE::BGSListForm* Survival_BlizzardWeather;
 	RE::BGSListForm* Survival_WarmUpObjectsList;
@@ -28,6 +27,10 @@ public:
 	RE::BGSListForm* Survival_ColdInteriorCells;
 	RE::BGSListForm* Survival_ColdInteriorLocations;
 	RE::BGSListForm* Survival_InteriorAreas;
+
+	RE::BGSListForm* _SHHeatSourceSmall;
+	RE::BGSListForm* _SHHeatSourcesNormal;
+	RE::BGSListForm* _SHHeatSourcesLarge;
 
 	RE::TESCondition* inWarmArea;
 	RE::TESCondition* inCoolArea;
@@ -49,11 +52,15 @@ public:
 	float GetWeatherColdLevel(RE::TESWeather* a_weather);
 
 	float GetSurvivalModeColdLevel();
+	float ConvertClimateTimeToGameTime(std::uint8_t a_time);
+	void  UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData);
+	void  UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData);
+	void  Update(RE::Actor* a_actor, float a_delta);
+	void  UpdateEffects();
+	void  UpdateEffectMaterialAlpha(RE::NiAVObject* a_object, float a_alpha);
 
-	void UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData);
-	void UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData);
-	void Update(RE::Actor* a_actor, float a_delta);
-	void UpdateEffects();
+	float intervalDelay = 0;
+	void  ScheduleHeatSourceUpdate();
 
 	void GetGameForms();
 
@@ -77,6 +84,7 @@ protected:
 			static void thunk(RE::PlayerCharacter* a_player, float a_delta)
 			{
 				func(a_player, a_delta);
+				GetSingleton()->ScheduleHeatSourceUpdate();
 				GetSingleton()->coldLevel = GetSingleton()->GetSurvivalModeColdLevel();
 				GetSingleton()->Update(a_player, g_deltaTime);
 				GetSingleton()->UpdateEffects();
@@ -94,7 +102,6 @@ protected:
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
 
-		
 		//struct Sky_UpdateWeather
 		//{
 		//	static void thunk(RE::Sky* a_sky)
@@ -109,7 +116,7 @@ protected:
 		{
 			stl::write_vfunc<RE::PlayerCharacter, 0xAD, PlayerCharacter_Update>();
 			stl::write_vfunc<RE::Character, 0xAD, Character_Update>();
-		//	stl::write_thunk_call<Sky_UpdateWeather>(RELOCATION_ID(25682, 26229).address() + REL::Relocate(0x29C, 0x3E6));
+			//	stl::write_thunk_call<Sky_UpdateWeather>(RELOCATION_ID(25682, 26229).address() + REL::Relocate(0x29C, 0x3E6));
 		}
 	};
 };

@@ -3,6 +3,10 @@
 #include "DataStorage.h"
 #include "ColdFX.h"
 
+#include "TrueHUDAPI.h"
+
+TRUEHUD_API::IVTrueHUD3* gTrueHUDInterface = nullptr;
+
 static void MessageHandler(SKSE::MessagingInterface::Message* message)
 {
 	switch (message->type) {
@@ -10,6 +14,16 @@ static void MessageHandler(SKSE::MessagingInterface::Message* message)
 		DataStorage::GetSingleton()->LoadData();
 		ColdFX::GetSingleton()->GetGameForms();
 		break;
+	case SKSE::MessagingInterface::kPostLoad:
+		{
+			gTrueHUDInterface = reinterpret_cast<TRUEHUD_API::IVTrueHUD3*>(TRUEHUD_API::RequestPluginAPI(TRUEHUD_API::InterfaceVersion::V3));
+			if (gTrueHUDInterface) {
+				logger::info("Obtained TrueHUD API");
+			} else {
+				logger::warn("Failed to obtain TrueHUD API");
+			}
+			break;
+		}
 	default:
 		break;
 	}

@@ -91,6 +91,11 @@ public:
 	//std::shared_mutex											heatSourceListLock;
 	//std::unordered_map<RE::TESObjectCELL*, std::list<RE::TESObjectREFR*>>  heatSourceList;
 
+	std::shared_mutex      heatSourceListLock;
+	std::list<RE::NiPoint3> smallHeatSourcePositionCache;
+	std::list<RE::NiPoint3> normalHeatSourcePositionCache;
+	std::list<RE::NiPoint3> largeHeatSourcePositionCache;
+
 	std::shared_ptr<Container> GetContainer(RE::Actor* a_actor);
 	std::shared_ptr<ActorData> GetOrCreateFromCache(RE::Actor* a_actor);
 
