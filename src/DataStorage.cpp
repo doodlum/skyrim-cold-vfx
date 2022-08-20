@@ -125,6 +125,12 @@ void DataStorage::LoadData()
 {
 	LoadJSON();
 
+	std::shared_ptr<Container> playerContainer(new Container);
+	playerContainer->Breath = jsonData["Player"]["1stPerson"] != nullptr ? GetArtObject(jsonData["Player"]["1stPerson"]) : nullptr;
+	playerContainer->TempFrequency = jsonData["Player"]["TempFrequency"];
+
+	player1stPerson = playerContainer;
+
 	for (auto& humanoid : jsonData["Humanoids"]) {
 		std::shared_ptr<HumanoidContainer> container(new HumanoidContainer);
 		container->Breath = humanoid["Breathe"] != nullptr ? GetArtObject(humanoid["Breathe"]) : nullptr;
@@ -142,8 +148,8 @@ void DataStorage::LoadData()
 
 	for (auto& creature : jsonData["Creatures"]) {
 		std::shared_ptr<CreatureContainer> container(new CreatureContainer);
-		container->Breath = creature["Breath"] != nullptr ? GetArtObject(creature["Breath"]) : nullptr;
-		container->BreathTwo = creature["BreatheTwo"] != nullptr ? GetArtObject(creature["BreatheTwo"]) : nullptr;
+		container->Breath = creature["Breathe"] != nullptr ? GetArtObject(creature["Breathe"]) : nullptr;
+		container->BreathTwo = creature["BreathTwo"] != nullptr ? GetArtObject(creature["BreathTwo"]) : nullptr;
 		container->TempFrequency = creature["TempFrequency"];
 		mtx.lock();
 		for (auto& race : creature["Races"])
