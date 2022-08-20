@@ -1,6 +1,12 @@
 #include "ColdFX.h"
+
 #include "DataStorage.h"
+#include <API/ENBSeriesAPI.h>
 #include <TrueHUDAPI.h>
+
+extern TRUEHUD_API::IVTrueHUD3* g_TrueHUDInterface;
+extern ENB_API::ENBSDKALT1001*  g_ENB;
+
 
 void ColdFX::UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData)
 {
@@ -20,7 +26,77 @@ void ColdFX::UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_act
 	a_actorData->activityLevel = std::lerp(a_actorData->activityLevel, maxActivityLevel, g_deltaTime * changeSpeed);
 }
 
-void ColdFX::Update(RE::Actor* a_actor, float)
+void ColdFX::DebugCurrentHeatGetValueBetweenTwoFixedColors(float value, uint8_t& red, uint8_t& green, uint8_t& blue)
+{
+	uint8_t aR = 55;
+	uint8_t aG = 145;
+	uint8_t aB = 245;
+	uint8_t bR = 245;
+	uint8_t bG = 155;
+	uint8_t bB = 55;
+	red = (uint8_t)((float)(bR - aR) * value + aR);    // Evaluated as -255*value + 255.
+	green = (uint8_t)((float)(bG - aG) * value + aG);  // Evaluates as 0.
+	blue = (uint8_t)((float)(bB - aB) * value + aB);   // Evaluates as 255*value + 0.
+}
+
+uint32_t ColdFX::DebugCreateRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+{
+	return ((r & 0xff) << 24) + ((g & 0xff) << 16) + ((b & 0xff) << 8) + (a & 0xff);
+}
+
+void ColdFX::DebugDrawHeatSource(RE::NiPoint3 a_position, float a_innerRadius, float a_outerRadius, float a_heat)
+{
+	uint8_t red;
+	uint8_t green;
+	uint8_t blue;
+
+	DebugCurrentHeatGetValueBetweenTwoFixedColors(1.0f, red, green, blue);
+	auto innerColor = DebugCreateRGBA(red, green, blue, 10);
+
+	DebugCurrentHeatGetValueBetweenTwoFixedColors(1.0f - a_heat, red, green, blue);
+	auto outerColor = DebugCreateRGBA(red, green, blue, 10);
+
+	g_TrueHUDInterface->DrawSphere(a_position, a_innerRadius, 4U, 0, innerColor);
+	g_TrueHUDInterface->DrawSphere(a_position, a_outerRadius, 4U, 0, outerColor);
+}
+
+
+void ColdFX::UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData)
+{
+	a_actorData->localTemp = 1.0f;
+	auto storage = DataStorage::GetSingleton();
+	storage->heatSourceListLock.lock();
+	for (auto position : storage->smallHeatSourcePositionCache) {
+		auto distance = position.GetDistance(a_actor->GetPosition());
+		auto outerRadius = 384;
+		auto innerRadius = outerRadius / 3;
+		a_actorData->localTemp = min(a_actorData->localTemp, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
+		if (storage->debugDrawHeatSources && a_actor->IsPlayerRef()) {
+			DebugDrawHeatSource(position, (float)innerRadius, (float)outerRadius, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
+		}
+	}
+	for (auto position : storage->normalHeatSourcePositionCache) {
+		auto distance = position.GetDistance(a_actor->GetPosition());
+		auto outerRadius = 512;
+		auto innerRadius = outerRadius / 3;
+		a_actorData->localTemp = min(a_actorData->localTemp, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
+		if (storage->debugDrawHeatSources && a_actor->IsPlayerRef()) {
+			DebugDrawHeatSource(position, (float)innerRadius, (float)outerRadius, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
+		}
+	}
+	for (auto position : storage->largeHeatSourcePositionCache) {
+		auto distance = position.GetDistance(a_actor->GetPosition());
+		auto outerRadius = 768;
+		auto innerRadius = outerRadius / 3;
+		a_actorData->localTemp = min(a_actorData->localTemp, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
+		if (storage->debugDrawHeatSources && a_actor->IsPlayerRef()) {
+			DebugDrawHeatSource(position, (float)innerRadius, (float)outerRadius, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
+		}
+	}
+	storage->heatSourceListLock.unlock();
+}
+
+void ColdFX::Update(RE::Actor* a_actor, float a_delta)
 {
 	if (a_actor->currentProcess->InHighProcess()) {
 		auto dataStorage = DataStorage::GetSingleton();
@@ -29,80 +105,93 @@ void ColdFX::Update(RE::Actor* a_actor, float)
 		UpdateActivity(a_actor, actorData);
 		UpdateLocalTemperature(a_actor, actorData);
 
-		actorData->breathDelay = max(0.0f, actorData->breathDelay - g_deltaTime);
-		if (actorData->breathDelay == 0.0f) {
-			auto container = dataStorage->GetContainer(a_actor);
-			a_actor->InstantiateHitArt(container->Breath, (container->TempFrequency / 2), nullptr, false, false);
-			actorData->breathDelay = container->TempFrequency / actorData->activityLevel;
+		actorData->breathDelay -= a_delta;
+		if (actorData->breathDelay <= 0.0f) {
+			if (a_actor->IsPlayerRef() && RE::PlayerCamera::GetSingleton()->IsInFirstPerson()) {
+				auto container = DataStorage::GetSingleton()->player1stPerson;
+				a_actor->InstantiateHitArt(container->Breath, container->TempFrequency, nullptr, true, true);
+				actorData->breathDelay = container->TempFrequency / actorData->activityLevel;
+			} else {
+				auto container = dataStorage->GetContainer(a_actor);
+				a_actor->InstantiateHitArt(container->Breath, container->TempFrequency, nullptr, true, false);
+				if (auto creatureData = dynamic_cast<CreatureContainer*>(container.get())) {
+					a_actor->InstantiateHitArt(creatureData->BreathTwo, container->TempFrequency, nullptr, true, false);
+				}
+				actorData->breathDelay = container->TempFrequency / actorData->activityLevel;
+			}
 		}
 	}
 }
 
+void ColdFX::UpdatePlayer(RE::PlayerCharacter* a_player, float a_delta)
+{
+	ScheduleHeatSourceUpdate();
+	switch (TemperatureMode) {
+	case 0:
+		// undefined behaviour
+		break;
+	case 1:
+		coldLevel = GetSurvivalModeColdLevel();
+		break;
+	case 2:
+		coldLevel = SunHelmCalculateColdLevel();
+		break;
+	}
+	Update(a_player, a_delta);
+	UpdateEffects();
+}
+
 void ColdFX::UpdateEffectMaterialAlpha(RE::NiAVObject* a_object, float a_alpha)
 {
-	using namespace RE;
-	BSVisit::TraverseScenegraphGeometries(a_object, [&](BSGeometry* a_geometry) -> BSVisit::BSVisitControl {
-		using State = BSGeometry::States;
-		using Feature = BSShaderMaterial::Feature;
-
-		auto effect = a_geometry->GetGeometryRuntimeData().properties[State::kEffect].get();
-		if (effect) {
-			auto lightingShader = netimmerse_cast<BSEffectShaderProperty*>(effect);
-			if (lightingShader) {
+	RE::BSVisit::TraverseScenegraphGeometries(a_object, [&](RE::BSGeometry* a_geometry) -> RE::BSVisit::BSVisitControl {
+		if (auto effect = a_geometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get())
+			if (auto lightingShader = netimmerse_cast<RE::BSEffectShaderProperty*>(effect))
 				lightingShader->SetMaterialAlpha(a_alpha);
-			}
-		}
-
-		return BSVisit::BSVisitControl::kContinue;
+		return RE::BSVisit::BSVisitControl::kContinue;
 	});
 }
 
-//RE::NiBound FindObjectBounds(RE::NiAVObject* a_object)
-//{
-//	using namespace RE;
-//	NiBound worldBound;
-//	BSVisit::TraverseScenegraphCollision(a_object, [&](bhkNiCollisionObject* a_collisionobject) -> BSVisit::BSVisitControl {
-//		auto a_geometry = (NiAVObject*)a_collisionobject;
-//		if (worldBound.radius < a_geometry->worldBound.radius)
-//			worldBound = a_geometry->worldBound;
-//		return BSVisit::BSVisitControl::kContinue;
-//	});
-//	BSVisit::TraverseScenegraphObjects(a_object, [&](NiAVObject* a_geometry) -> BSVisit::BSVisitControl {
-//		if (worldBound.radius < a_geometry->worldBound.radius)
-//			worldBound = a_geometry->worldBound;
-//		return BSVisit::BSVisitControl::kContinue;
-//	});
-//	return worldBound;
-//}
+void ColdFX::UpdateActorEffect(RE::ModelReferenceEffect& a_modelEffect)
+{
+	auto storage = DataStorage::GetSingleton();
+	auto actorData = storage->GetOrCreateFromCache(a_modelEffect.controller->GetTargetReference()->As<RE::Actor>());
+	UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), std::clamp((coldLevel * actorData->localTemp) / 5.0f, 0.0f, 1.0f));
+}
 
 void ColdFX::UpdateEffects()
 {
 	auto processList = RE::ProcessLists::GetSingleton();
 	processList->GetModelEffects([&](RE::ModelReferenceEffect& a_modelEffect) {
-		if (auto owner = a_modelEffect.controller->GetTargetReference())
-			if (auto actor = owner->As<RE::Actor>()) {
-				auto container = DataStorage::GetSingleton()->GetContainer(actor);
-				if (a_modelEffect.artObject == container->Breath) {
-					auto actorData = DataStorage::GetSingleton()->GetOrCreateFromCache(actor);
-					if (a_modelEffect.Get3D()) {
-						UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), std::clamp((coldLevel * actorData->localTemp) / 5.0f, 0.0f, 1.0f));
+		if (a_modelEffect.controller) {
+			if (auto owner = a_modelEffect.controller->GetTargetReference())
+				if (auto actor = owner->As<RE::Actor>()) {
+					auto storage = DataStorage::GetSingleton();
+					auto container = storage->GetContainer(actor);
+					if (actor->IsPlayerRef()) {
+						if (a_modelEffect.artObject == container->Breath && a_modelEffect.Get3D()) {
+							UpdateActorEffect(a_modelEffect);
+						} else if (a_modelEffect.artObject == storage->player1stPerson->Breath) {
+							auto actorData = storage->GetOrCreateFromCache(actor);
+							if (RE::PlayerCamera::GetSingleton()->IsInFirstPerson()) {
+								UpdateActorEffect(a_modelEffect);
+							} else {
+								UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), 0.0f);
+							}
+						}
+					} else if (a_modelEffect.artObject == container->Breath) {
+						if (a_modelEffect.Get3D()) {
+							UpdateActorEffect(a_modelEffect);
+						}
+					} else if (auto creatureData = dynamic_cast<CreatureContainer*>(container.get())) {
+						if (a_modelEffect.artObject == creatureData->BreathTwo) {
+							UpdateActorEffect(a_modelEffect);
+						}
 					}
 				}
-			}
+		}
 		return true;
 	});
 }
-
-//bool IsInRegion(std::string a_region)
-//{
-//	RE::TESRegionList* regionList = ((RE::ExtraRegionList*)RE::PlayerCharacter::GetSingleton()->GetParentCell()->extraList.GetByType(RE::ExtraDataType::kRegionList))->list;
-//	for (const auto& region : *regionList) {
-//		std::string name = region->GetFormEditorID();
-//		if (name == a_region)
-//			return true;
-//	}
-//	return false;
-//}
 
 ColdFX::AREA_TYPE ColdFX::GetSurvivalModeAreaType()
 {
@@ -124,8 +213,13 @@ ColdFX::AREA_TYPE ColdFX::GetSurvivalModeAreaType()
 	return ColdFX::AREA_TYPE::kAreaTypeCool;
 }
 
-void ColdFX::GetGameForms()
+void ColdFX::GetSurvivalModeGameForms()
 {
+	if (!RE::TESDataHandler::GetSingleton()->LookupLoadedLightModByName("ccQDRSSE001-SurvivalMode.esl"))
+		return;
+
+	TemperatureMode = 1;
+
 	Survival_AshWeather = RE::TESForm::LookupByEditorID("Survival_AshWeather")->As<RE::BGSListForm>();
 	Survival_BlizzardWeather = RE::TESForm::LookupByEditorID("Survival_BlizzardWeather")->As<RE::BGSListForm>();
 	Survival_WarmUpObjectsList = RE::TESForm::LookupByEditorID("Survival_WarmUpObjectsList")->As<RE::BGSListForm>();
@@ -142,13 +236,9 @@ void ColdFX::GetGameForms()
 	inFreezingArea = &Survival_RegionInfoSpell->effects[2]->conditions;
 	inFallForestMountainsFreezingArea = &Survival_RegionInfoSpell->effects[3]->conditions;
 	inSouthForestMountainsFreezingArea = &Survival_RegionInfoSpell->effects[4]->conditions;
-
-	_SHHeatSourceSmall = RE::TESForm::LookupByEditorID("_SHHeatSourceSmall")->As<RE::BGSListForm>();
-	_SHHeatSourcesNormal = RE::TESForm::LookupByEditorID("_SHHeatSourcesNormal")->As<RE::BGSListForm>();
-	_SHHeatSourcesLarge = RE::TESForm::LookupByEditorID("_SHHeatSourcesLarge")->As<RE::BGSListForm>();
 }
 
-float ColdFX::GetWeatherColdLevel(RE::TESWeather* a_weather)
+float ColdFX::GetSurvivalModeWeatherColdLevel(RE::TESWeather* a_weather)
 {
 	if (a_weather) {
 		if (a_weather->data.flags.any(RE::TESWeather::WeatherDataFlag::kSnow)) {
@@ -215,82 +305,11 @@ float ColdFX::GetSurvivalModeColdLevel()
 			}
 		}
 
-		newColdlevel += std::lerp(GetWeatherColdLevel(sky->lastWeather), GetWeatherColdLevel(sky->currentWeather), sky->currentWeatherPct);
+		newColdlevel += std::lerp(GetSurvivalModeWeatherColdLevel(sky->lastWeather), GetSurvivalModeWeatherColdLevel(sky->currentWeather), sky->currentWeatherPct);
 	}
 	return newColdlevel;
 }
 
-extern TRUEHUD_API::IVTrueHUD3* gTrueHUDInterface;
-
-void DebugCurrentHeatGetValueBetweenTwoFixedColors(float value, uint8_t& red, uint8_t& green, uint8_t& blue)
-{
-	uint8_t aR = 55;
-	uint8_t aG = 145;
-	uint8_t aB = 245;  // RGB for our 1st color (blue in this case).
-	uint8_t bR = 245;
-	uint8_t bG = 155;
-	uint8_t bB = 55;  // RGB for our 2nd color (red in this case).
-
-	red = (uint8_t)((float)(bR - aR) * value + aR);    // Evaluated as -255*value + 255.
-	green = (uint8_t)((float)(bG - aG) * value + aG);  // Evaluates as 0.
-	blue = (uint8_t)((float)(bB - aB) * value + aB);   // Evaluates as 255*value + 0.
-}
-
-uint32_t DebugCreateRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
-{
-	return ((r & 0xff) << 24) + ((g & 0xff) << 16) + ((b & 0xff) << 8) + (a & 0xff);
-}
-
-void DebugDrawHeatSource(RE::NiPoint3 a_position, float a_innerRadius, float a_outerRadius, float a_heat)
-{
-	uint8_t red;
-	uint8_t green;
-	uint8_t blue;
-
-	DebugCurrentHeatGetValueBetweenTwoFixedColors(1.0f, red, green, blue);
-	auto innerColor = DebugCreateRGBA(red, green, blue, 10);
-
-	DebugCurrentHeatGetValueBetweenTwoFixedColors(1.0f - a_heat, red, green, blue);
-	auto outerColor = DebugCreateRGBA(red, green, blue, 10);
-
-	gTrueHUDInterface->DrawSphere(a_position, a_innerRadius, 4U, 0, innerColor);
-	gTrueHUDInterface->DrawSphere(a_position, a_outerRadius, 4U, 0, outerColor);
-}
-
-void ColdFX::UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData)
-{
-	a_actorData->localTemp = 1.0f;
-	auto storage = DataStorage::GetSingleton();
-	storage->heatSourceListLock.lock();
-	for (auto position : storage->smallHeatSourcePositionCache) {
-		auto distance = position.GetDistance(a_actor->GetPosition());
-		auto outerRadius = 384;
-		auto innerRadius = outerRadius / 2;
-		a_actorData->localTemp = min(a_actorData->localTemp, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
-		if (a_actor->IsPlayerRef()) {
-			DebugDrawHeatSource(position, (float)innerRadius, (float)outerRadius, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
-		}
-	}
-	for (auto position : storage->normalHeatSourcePositionCache) {
-		auto distance = position.GetDistance(a_actor->GetPosition());
-		auto outerRadius = 512;
-		auto innerRadius = outerRadius / 2;
-		a_actorData->localTemp = min(a_actorData->localTemp, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
-		if (a_actor->IsPlayerRef()) {
-			DebugDrawHeatSource(position, (float)innerRadius, (float)outerRadius, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
-		}
-	}
-	for (auto position : storage->largeHeatSourcePositionCache) {
-		auto distance = position.GetDistance(a_actor->GetPosition());
-		auto outerRadius = 768;
-		auto innerRadius = outerRadius / 2;
-		a_actorData->localTemp = min(a_actorData->localTemp, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
-		if (a_actor->IsPlayerRef()) {
-			DebugDrawHeatSource(position, (float)innerRadius, (float)outerRadius, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
-		}
-	}
-	storage->heatSourceListLock.unlock();
-}
 
 void ColdFX::ScheduleHeatSourceUpdate()
 {
@@ -321,3 +340,184 @@ void ColdFX::ScheduleHeatSourceUpdate()
 		intervalDelay = 1.0f;
 	}
 }
+
+void ColdFX::GetSunHelmGameForms()
+{
+	if (!RE::TESDataHandler::GetSingleton()->LookupLoadedModByName("SunHelmSurvival.esp"))
+		return;
+
+	TemperatureMode = 2;
+
+	_SHColdCloudyWeather = RE::TESForm::LookupByEditorID("_SHColdCloudyWeather")->As<RE::BGSListForm>();
+	_SHBlizzardWeathers = RE::TESForm::LookupByEditorID("_SHBlizzardWeathers")->As<RE::BGSListForm>();
+
+	_SHInteriorWorldSpaces = RE::TESForm::LookupByEditorID("_SHInteriorWorldSpaces")->As<RE::BGSListForm>();
+	_SHColdInteriors = RE::TESForm::LookupByEditorID("_SHColdInteriors")->As<RE::BGSListForm>();
+
+	_SHHeatSourceSmall = RE::TESForm::LookupByEditorID("_SHHeatSourceSmall")->As<RE::BGSListForm>();
+	_SHHeatSourcesNormal = RE::TESForm::LookupByEditorID("_SHHeatSourcesNormal")->As<RE::BGSListForm>();
+	_SHHeatSourcesLarge = RE::TESForm::LookupByEditorID("_SHHeatSourcesLarge")->As<RE::BGSListForm>();
+
+	RE::SpellItem* _SHRegionSpell = RE::TESForm::LookupByEditorID("_SHRegionSpell")->As<RE::SpellItem>();
+	comfRegion = &_SHRegionSpell->effects[0]->conditions;
+	freezingRegion = &_SHRegionSpell->effects[1]->conditions;
+	coolRegion = &_SHRegionSpell->effects[2]->conditions;
+	pineRegion = &_SHRegionSpell->effects[3]->conditions;
+	highHrothgarRegion = &_SHRegionSpell->effects[4]->conditions;
+	marshRegion = &_SHRegionSpell->effects[5]->conditions;
+	volcanicRegion = &_SHRegionSpell->effects[6]->conditions;
+	throatRegion = &_SHRegionSpell->effects[7]->conditions;
+	reachRegion = &_SHRegionSpell->effects[8]->conditions;
+}
+
+// SunHelm will try to infer as to the current regions cold level. If there can be a blizzard here, it infers it as a freezing region. Otherwise, its cool if it can snow, and comfortable if it cannot. (Assuming weathers are tagged correctly)
+ColdFX::REGION_TYPE ColdFX::SunHelmMakeUnknownRegionGuess()
+{
+	RE::TESWeather* snow = Sky_FindWeather(3);
+	if (snow) {
+		if (!strstr(snow->GetFormEditorID(), "Ash")) {
+			if (_SHBlizzardWeathers->HasForm(snow)) {
+				return REGION_TYPE::FREEZING;
+			} else if (strcmp(RE::PlayerCharacter::GetSingleton()->GetWorldspace()->GetFormEditorID(), "BSHeartland") == 0) {
+				return REGION_TYPE::FREEZING;
+			} else {
+				return REGION_TYPE::REACH;
+			}
+		}
+	}
+	return REGION_TYPE::COMF;
+}
+
+ColdFX::REGION_TYPE ColdFX::SunHelmGetCurrentRegion()
+{
+	_SHInInteriorType = -1;
+	auto player = RE::PlayerCharacter::GetSingleton();
+	if (player->GetParentCell()->IsInteriorCell() || _SHInteriorWorldSpaces->HasForm(player->GetWorldspace())) {
+		if (_SHColdInteriors->HasForm(player->GetCurrentLocation()) || _SHColdInteriors->HasForm(player->GetParentCell())) {
+			_SHInInteriorType = 1;
+			return REGION_TYPE::COLDINTERIOR;
+		} else {
+			_SHInInteriorType = 0;
+			return REGION_TYPE::WARMINTERIOR;
+		}
+	} else if (volcanicRegion->IsTrue(player, nullptr)) {
+		return REGION_TYPE::VOLCANIC;
+	} else if (marshRegion->IsTrue(player, nullptr)) {
+		return REGION_TYPE::MARSH;
+	} else if (throatRegion->IsTrue(player, nullptr)) {
+		return REGION_TYPE::THROAT;
+	} else if (pineRegion->IsTrue(player, nullptr)) {
+		return REGION_TYPE::PINE;
+	} else if (comfRegion->IsTrue(player, nullptr)) {
+		return REGION_TYPE::COMF;
+	} else if (freezingRegion->IsTrue(player, nullptr) || highHrothgarRegion->IsTrue(player, nullptr)) {
+		return REGION_TYPE::FREEZING;
+	} else if (reachRegion->IsTrue(player, nullptr)) {
+		return REGION_TYPE::REACH;
+	} else if (coolRegion->IsTrue(player, nullptr)) {
+		return REGION_TYPE::COOL;
+	}
+	return SunHelmMakeUnknownRegionGuess();
+}
+
+float ColdFX::SunHelmCalculateRegionTemp()
+{
+	switch (SunHelmGetCurrentRegion()) {
+	case REGION_TYPE::VOLCANIC:
+		return _SHVolcanicTemp;
+		break;
+	case REGION_TYPE::MARSH:
+		return _SHMarshTemp;
+		break;
+	case REGION_TYPE::THROAT:
+		return _SHComfTemp;
+		break;
+	case REGION_TYPE::PINE:
+		return _SHFreezingTemp;
+		break;
+	case REGION_TYPE::COMF:
+		return _SHComfTemp;
+		break;
+	case REGION_TYPE::FREEZING:
+		return _SHFreezingTemp;
+		break;
+	case REGION_TYPE::REACH:
+		return _SHReachTemp;
+		break;
+	case REGION_TYPE::COOL:
+		return _SHCoolTemp;
+		break;
+	case REGION_TYPE::WARMINTERIOR:
+		return _SHWarmTemp;
+		break;
+	case REGION_TYPE::COLDINTERIOR:
+		return _SHFreezingTemp;
+		break;
+	}
+	return _SHCoolTemp;
+}
+
+float ColdFX::SunHelmCalculateNightPenalty(float a_regionTemp)
+{
+	auto player = RE::PlayerCharacter::GetSingleton();
+	float pen = 0;
+	if (!player->GetParentCell()->IsInteriorCell()) {
+		auto sky = RE::Sky::GetSingleton();
+		auto climate = sky->currentClimate;
+		auto midSunrise = std::lerp(ConvertClimateTimeToGameTime(climate->timing.sunrise.begin), ConvertClimateTimeToGameTime(climate->timing.sunrise.end), 0.5f);
+		auto midSunset = std::lerp(ConvertClimateTimeToGameTime(climate->timing.sunset.begin), ConvertClimateTimeToGameTime(climate->timing.sunset.end), 0.5f);
+		auto currentHour = RE::Calendar::GetSingleton()->GetHour();
+		if (currentHour < midSunrise || currentHour > midSunset) {
+			if (a_regionTemp >= 250) {
+				return _SHFreezingNightPen;
+			} else if (a_regionTemp >= 100) {
+				return _SHCoolNightPen;
+			} else {
+				return _SHWarmNightPen;
+			}
+		}
+	}
+	return pen;
+}
+
+float ColdFX::SunHelmCalculateWeatherTemp(RE::TESWeather* a_weather)
+{
+	float weatherTemp = ClearWeatherPen;
+	if (!RE::PlayerCharacter::GetSingleton()->GetParentCell()->IsInteriorCell()) {
+		if (_SHColdCloudyWeather->HasForm(a_weather)) {
+			weatherTemp = CloudySnowPen;
+		} else {
+			if (a_weather->data.flags.any(RE::TESWeather::WeatherDataFlag::kRainy)) {
+				weatherTemp = RainWeatherPen;
+			} else if (a_weather->data.flags.any(RE::TESWeather::WeatherDataFlag::kSnow) && !strstr(a_weather->GetFormEditorID(), "Ash")) {
+				if (_SHBlizzardWeathers->HasForm(a_weather)) {
+					weatherTemp = BlizzardWeatherPen;
+				} else {
+					weatherTemp = SnowWeatherPen;
+				}
+			}
+		}
+	}
+	return weatherTemp;
+}
+
+float ColdFX::SunHelmCalculateColdLevel()
+{
+	float tempTotal = 0;
+	tempTotal += SunHelmCalculateRegionTemp();
+	tempTotal += SunHelmCalculateNightPenalty(tempTotal);
+	auto sky = RE::Sky::GetSingleton();
+	tempTotal += std::lerp(SunHelmCalculateWeatherTemp(sky->lastWeather), SunHelmCalculateWeatherTemp(sky->currentWeather), sky->currentWeatherPct);
+	return min(tempTotal, _SHColdLevelCap) * (coldLevelBlizzardMod / _SHFreezingTemp);
+}
+
+//bool IsInRegion(std::string a_region)
+//{
+//	RE::TESRegionList* regionList = ((RE::ExtraRegionList*)RE::PlayerCharacter::GetSingleton()->GetParentCell()->extraList.GetByType(RE::ExtraDataType::kRegionList))->list;
+//	for (const auto& region : *regionList) {
+//		std::string name = region->GetFormEditorID();
+//		if (name == a_region)
+//			return true;
+//	}
+//	return false;
+//}

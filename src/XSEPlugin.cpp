@@ -1,27 +1,49 @@
-
-#include "Hooks.h"
-#include "DataStorage.h"
 #include "ColdFX.h"
+#include "DataStorage.h"
+#include "Hooks.h"
 
+#include "API/ENBSeriesAPI.h"
 #include "TrueHUDAPI.h"
 
-TRUEHUD_API::IVTrueHUD3* gTrueHUDInterface = nullptr;
+TRUEHUD_API::IVTrueHUD3* g_TrueHUDInterface = nullptr;
+ENB_API::ENBSDKALT1001*  g_ENB = nullptr;
 
 static void MessageHandler(SKSE::MessagingInterface::Message* message)
 {
 	switch (message->type) {
 	case SKSE::MessagingInterface::kDataLoaded:
 		DataStorage::GetSingleton()->LoadData();
-		ColdFX::GetSingleton()->GetGameForms();
+		ColdFX::GetSingleton()->GetSurvivalModeGameForms();
+		ColdFX::GetSingleton()->GetSunHelmGameForms();
 		break;
 	case SKSE::MessagingInterface::kPostLoad:
 		{
-			gTrueHUDInterface = reinterpret_cast<TRUEHUD_API::IVTrueHUD3*>(TRUEHUD_API::RequestPluginAPI(TRUEHUD_API::InterfaceVersion::V3));
-			if (gTrueHUDInterface) {
+			g_TrueHUDInterface = reinterpret_cast<TRUEHUD_API::IVTrueHUD3*>(TRUEHUD_API::RequestPluginAPI(TRUEHUD_API::InterfaceVersion::V3));
+			if (g_TrueHUDInterface) {
 				logger::info("Obtained TrueHUD API");
 			} else {
 				logger::warn("Failed to obtain TrueHUD API");
 			}
+
+			g_ENB = reinterpret_cast<ENB_API::ENBSDKALT1001*>(ENB_API::RequestENBAPI(ENB_API::SDKVersion::V1001));
+			if (g_ENB) {
+				logger::info("Obtained ENB API");
+				g_ENB->SetCallbackFunction([](ENBCallbackType calltype) {
+					switch (calltype) {
+					case ENBCallbackType::ENBCallback_PostLoad:
+						//ShadowBoost::GetSingleton()->LoadJSON();
+						break;
+					case ENBCallbackType::ENBCallback_PreSave:
+						//ShadowBoost::GetSingleton()->SaveJSON();
+						break;
+					default:
+						//ColdFX::GetSingleton()->UpdateUI();
+						break;
+					}
+				});
+			} else
+				logger::info("Unable to acquire ENB API");
+
 			break;
 		}
 	default:
@@ -35,7 +57,6 @@ void Init()
 	messaging->RegisterListener("SKSE", MessageHandler);
 
 	Hooks::Install();
-
 }
 
 void InitializeLog()
