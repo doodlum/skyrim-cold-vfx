@@ -1,40 +1,43 @@
 {
-  "Humanoids": [
+  "Player": {
+    "FirstPerson": {
+      "Breath": "_WetBreath1stAO"
+    } 
+  },
+  "Actors": [
     {
     "Races": [
       "Default"
     ],
     "Breathe" : "_WetBreathAO",
-    "BreatheFast" : "_WetBreathFastVE",
-    "BreatheFrigid" : "_WetBreathFrigidVE",
+    "BreatheFast" : "_WetBreathFastAO",
+    "BreatheFrigid" : "_WetBreathFrigidAO",
     "TempFrequency" : 2.4
-  },
-  {
-    "Races": [
-    "ArgonianRace"
-  ],
-  "Breathe" : "_WetBreathArtAO",
-  "BreatheFast" : "_WetBreathFastArgVE",
-  "BreatheFrigid" : "_WetBreathFrigidArgVE",
-  "TempFrequency" : 2.4
-  },
-  {
-    "Races": [
-    "KhajiitRace"
-  ],
-  "Breathe" : "_WetBreathKhajAO",
-  "BreatheFast" : "_WetBreathFastKhajVE",
-  "BreatheFrigid" : "_WetBreathFrigidKhajVE",
-  "TempFrequency" : 2.4
-  }
-],
-  "Creatures": [
+    },
+    {
+      "Races": [
+      "ArgonianRace"
+    ],
+    "Breathe" : "_WetBreathArtAO",
+    "BreatheFast" : "_WetBreathFastArgAO",
+    "BreatheFrigid" : "_WetBreathFrigidArgAO",
+    "TempFrequency" : 2.4
+    },
+    {
+      "Races": [
+      "KhajiitRace"
+    ],
+    "Breathe" : "_WetBreathKhajAO",
+    "BreatheFast" : "_WetBreathFastKhajAO",
+    "BreatheFrigid" : "_WetBreathFrigidKhajAO",
+    "TempFrequency" : 2.4
+    },
     {
       "Races": [
         "HorseRace"
       ],
-      "Breathe" : "_WetBreathHorseLVE",
-      "BreathTwo" : "_WetBreathHorseRVE",
+      "Breathe" : "_WetBreathHorseLAO",
+      "BreathTwo" : "_WetBreathHorseRAO",
       "TempFrequency" : 3.6
     },
     {
@@ -46,7 +49,7 @@
         "MG07DogRace",
         "DGHuskies"
       ],
-      "Breathe" : "_WetBreathCanineVE",
+      "Breathe" : "_WetBreathCanineAO",
       "TempFrequency" : 1.2
     },
     {
@@ -54,7 +57,7 @@
         "GiantRace",
         "C00GiantOutsideWhiterunRace"
       ],
-      "Breathe" : "_WetBreathGiantVE",
+      "Breathe" : "_WetBreathGiantAO",
       "TempFrequency" : 2.5
     },
     {
@@ -63,7 +66,7 @@
         "BearBrownRace",
         "BearSnowRace"
       ],
-      "Breathe" : "_WetBreathBearVE",
+      "Breathe" : "_WetBreathBearAO",
       "TempFrequency" : 2.15
     },
     {
@@ -73,14 +76,14 @@
         "BearSnowRace",
         "DGCat"
       ],
-      "Breathe" : "_WetBreathSabreVE",
+      "Breathe" : "_WetBreathSabreAO",
       "TempFrequency" : 1.3
     },
     {
       "Races": [
         "FalmerRace"
       ],
-      "Breathe" : "_WetBreathFalmerVE",
+      "Breathe" : "_WetBreathFalmerAO",
       "TempFrequency" : 1.3
     },
     {
@@ -88,7 +91,7 @@
         "WerewolfBeastRace",
         "DBWerebear"
       ],
-      "Breathe" : "_WetBreath_WerewolfVE",
+      "Breathe" : "_WetBreath_WerewolfAO",
       "TempFrequency" : 1.9
     },
     {
@@ -96,37 +99,37 @@
         "DragonRace",
         "DBDragon"
       ],
-      "Breathe" : "_WetBreathDragonRVE",
-      "BreathTwo" : "_WetBreathDragonLVE",
+      "Breathe" : "_WetBreathDragonRAO",
+      "BreathTwo" : "_WetBreathDragonLAO",
       "TempFrequency" : 3.55
     },
     {
       "Races": [
         "CowRace"
       ],
-      "Breathe" : "_WetBreathCowRVE",
-      "BreathTwo" : "_WetBreathCowLVE",
+      "Breathe" : "_WetBreathCowRAO",
+      "BreathTwo" : "_WetBreathCowLAO",
       "TempFrequency" : 3.4
     },
     {
       "Races": [
         "HagravenRace"
       ],
-      "Breathe" : "_WetBreathHagravenVE",
+      "Breathe" : "_WetBreathHagravenAO",
       "TempFrequency" : 1.5
     },
     {
       "Races": [
         "DBDragon"
       ],
-      "Breathe" : "_WetBreathHagravenVE",
+      "Breathe" : "_WetBreathHagravenAO",
       "TempFrequency" : 1.5
     },
     {
       "Races": [
         "DBLurker"
       ],
-      "Breathe" : "_WetBreathLurkerVE",
+      "Breathe" : "_WetBreathLurkerAO",
       "TempFrequency" : 2.3
     },
     {
@@ -134,7 +137,7 @@
         "DBBoar",
         "DBMountedRiek"
       ],
-      "Breathe" : "_WetBreathBoarVE",
+      "Breathe" : "_WetBreathBoarAO",
       "TempFrequency" : 1.4
     },
     {
@@ -142,7 +145,7 @@
         "DBRiek",
         "DBThirskRiek"
       ],
-      "Breathe" : "_WetBreathRiekVE",
+      "Breathe" : "_WetBreathRiekAO",
       "TempFrequency" : 1.2
     }
   ]
