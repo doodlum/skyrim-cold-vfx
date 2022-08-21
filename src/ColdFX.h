@@ -45,10 +45,23 @@ protected:
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
 
+		struct ProcessLists_Player
+		{
+			static INT64 thunk(RE::PlayerCharacter* a_player, float unk1, char unk2)
+			{
+				INT64 res = func(a_player, unk1, unk2);
+				GetSingleton()->UpdatePlayer(a_player, g_deltaTime);
+				return res;
+			}
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
+
 		static void Install()
 		{
-			stl::write_vfunc<RE::PlayerCharacter, 0xAD, PlayerCharacter_Update>();
-			stl::write_vfunc<RE::Character, 0xAD, Character_Update>();
+		//	stl::write_vfunc<RE::PlayerCharacter, 0xAD, PlayerCharacter_Update>();
+		//	stl::write_vfunc<RE::Character, 0xAD, Character_Update>();
+			stl::write_thunk_jump<ProcessLists_Player>(RELOCATION_ID(38107, 39063).address() + REL::Relocate(0xD, 0xD));
+
 		}
 	};
 
@@ -71,6 +84,12 @@ private:
 	RE::BGSListForm* Survival_ColdInteriorLocations;
 	RE::BGSListForm* Survival_InteriorAreas;
 
+	RE::TESCondition* inWarmArea;
+	RE::TESCondition* inCoolArea;
+	RE::TESCondition* inFreezingArea;
+	RE::TESCondition* inSouthForestMountainsFreezingArea;
+	RE::TESCondition* inFallForestMountainsFreezingArea;
+
 	float coldLevelCoolArea = 3;
 	float coldLevelFreezingAreaNightMod = 4;
 	float coldLevelWarmAreaNightMod = 1;
@@ -80,12 +99,6 @@ private:
 	float coldLevelCoolAreaNightMod = 2;
 	float coldLevelWarmArea = 0;
 	float coldLevelFreezingArea = 6;
-
-	RE::TESCondition* inWarmArea;
-	RE::TESCondition* inCoolArea;
-	RE::TESCondition* inFreezingArea;
-	RE::TESCondition* inSouthForestMountainsFreezingArea;
-	RE::TESCondition* inFallForestMountainsFreezingArea;
 
 	enum class AREA_TYPE
 	{
@@ -102,6 +115,26 @@ private:
 
 	// SunHelm Survival
 
+	RE::BGSListForm* _SHHeatSourceSmall;
+	RE::BGSListForm* _SHHeatSourcesNormal;
+	RE::BGSListForm* _SHHeatSourcesLarge;
+
+	RE::BGSListForm* _SHColdCloudyWeather;
+	RE::BGSListForm* _SHBlizzardWeathers;
+
+	RE::BGSListForm* _SHInteriorWorldSpaces;
+	RE::BGSListForm* _SHColdInteriors;
+
+	RE::TESCondition* volcanicRegion;
+	RE::TESCondition* marshRegion;
+	RE::TESCondition* throatRegion;
+	RE::TESCondition* pineRegion;
+	RE::TESCondition* comfRegion;
+	RE::TESCondition* freezingRegion;
+	RE::TESCondition* highHrothgarRegion;
+	RE::TESCondition* reachRegion;
+	RE::TESCondition* coolRegion;
+
 	float _SHFreezingTemp = 250;
 	float _SHCoolTemp = 125;
 	float _SHReachTemp = 100;
@@ -112,16 +145,6 @@ private:
 	float _SHWarmTemp = 0;
 
 	float SeasonMult[12];
-
-	RE::BGSListForm* _SHHeatSourceSmall;
-	RE::BGSListForm* _SHHeatSourcesNormal;
-	RE::BGSListForm* _SHHeatSourcesLarge;
-
-	RE::BGSListForm* _SHColdCloudyWeather;
-	RE::BGSListForm* _SHBlizzardWeathers;
-
-	RE::BGSListForm* _SHInteriorWorldSpaces;
-	RE::BGSListForm* _SHColdInteriors;
 
 	int _SHInInteriorType = -1;
 
@@ -137,15 +160,7 @@ private:
 
 	float _SHColdLevelCap = 900;
 
-	RE::TESCondition* volcanicRegion;
-	RE::TESCondition* marshRegion;
-	RE::TESCondition* throatRegion;
-	RE::TESCondition* pineRegion;
-	RE::TESCondition* comfRegion;
-	RE::TESCondition* freezingRegion;
-	RE::TESCondition* highHrothgarRegion;
-	RE::TESCondition* reachRegion;
-	RE::TESCondition* coolRegion;
+
 
 	enum class REGION_TYPE
 	{
@@ -184,15 +199,16 @@ private:
 	float coldLevel = 0.0f;
 
 	void UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData);
-	void UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData);
+	void UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData, float a_delta);
 	void UpdateEffects();
 	void UpdateEffectMaterialAlpha(RE::NiAVObject* a_object, float a_alpha);
 	void UpdateActorEffect(RE::ModelReferenceEffect& a_modelEffect);
+	void UpdateFirstPersonEffect(RE::ModelReferenceEffect& a_modelEffect);
 	void Update(RE::Actor* a_actor, float a_delta);
 	void UpdatePlayer(RE::PlayerCharacter* a_player, float a_delta);
 
 	float    intervalDelay = 0;
-	void     ScheduleHeatSourceUpdate();
+	void  ScheduleHeatSourceUpdate(float a_delta);
 
 	void DebugCurrentHeatGetValueBetweenTwoFixedColors(float value, uint8_t& red, uint8_t& green, uint8_t& blue);
 	uint32_t DebugCreateRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a);

@@ -1,20 +1,20 @@
 #include "ColdFX.h"
 
 #include "DataStorage.h"
+
 #include <API/ENBSeriesAPI.h>
 #include <TrueHUDAPI.h>
 
 extern TRUEHUD_API::IVTrueHUD3* g_TrueHUDInterface;
 extern ENB_API::ENBSDKALT1001*  g_ENB;
 
-
-void ColdFX::UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData)
+void ColdFX::UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData, float a_delta)
 {
 	float maxActivityLevel;
 
 	if (a_actor->IsSprinting())
 		maxActivityLevel = 2.5;
-	else if (a_actor->IsRunning() || a_actor->IsSwimming() || a_actor->GetAttackingWeapon())
+	else if (a_actor->IsRunning() || a_actor->IsSwimming() || a_actor->GetAttackingWeapon() || a_actor->IsFlying())
 		maxActivityLevel = 1.5;
 	else if (a_actor->IsWalking() || a_actor->IsSneaking())
 		maxActivityLevel = 1.25;
@@ -23,7 +23,7 @@ void ColdFX::UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_act
 
 	auto changeSpeed = maxActivityLevel > a_actorData->activityLevel ? 0.5f : 0.05f;
 
-	a_actorData->activityLevel = std::lerp(a_actorData->activityLevel, maxActivityLevel, g_deltaTime * changeSpeed);
+	a_actorData->activityLevel = std::lerp(a_actorData->activityLevel, maxActivityLevel, a_delta * changeSpeed);
 }
 
 void ColdFX::DebugCurrentHeatGetValueBetweenTwoFixedColors(float value, uint8_t& red, uint8_t& green, uint8_t& blue)
@@ -51,15 +51,14 @@ void ColdFX::DebugDrawHeatSource(RE::NiPoint3 a_position, float a_innerRadius, f
 	uint8_t blue;
 
 	DebugCurrentHeatGetValueBetweenTwoFixedColors(1.0f, red, green, blue);
-	auto innerColor = DebugCreateRGBA(red, green, blue, 10);
+	auto innerColor = DebugCreateRGBA(red, green, blue, 20);
 
 	DebugCurrentHeatGetValueBetweenTwoFixedColors(1.0f - a_heat, red, green, blue);
-	auto outerColor = DebugCreateRGBA(red, green, blue, 10);
+	auto outerColor = DebugCreateRGBA(red, green, blue, 20);
 
-	g_TrueHUDInterface->DrawSphere(a_position, a_innerRadius, 4U, 0, innerColor);
-	g_TrueHUDInterface->DrawSphere(a_position, a_outerRadius, 4U, 0, outerColor);
+	g_TrueHUDInterface->DrawSphere(a_position, a_innerRadius, 1U, 0, innerColor);
+	g_TrueHUDInterface->DrawSphere(a_position, a_outerRadius, 1U, 0, outerColor);
 }
-
 
 void ColdFX::UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData)
 {
@@ -93,39 +92,63 @@ void ColdFX::UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorDat
 			DebugDrawHeatSource(position, (float)innerRadius, (float)outerRadius, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
 		}
 	}
+
+	storage->mtx.lock();
+	for (auto& form : storage->formCache) {
+		auto actorData = form.second;
+		actorData->heatSourceLock.lock();
+		if (actorData->hasHeatSource) {
+			auto distance = actorData->heatSourcePosition.GetDistance(a_actor->GetPosition());
+			auto outerRadius = 256;
+			auto innerRadius = outerRadius / 3;
+			a_actorData->localTemp = min(a_actorData->localTemp, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
+			if (storage->debugDrawHeatSources && a_actor->IsPlayerRef()) {
+				DebugDrawHeatSource(actorData->heatSourcePosition, (float)innerRadius, (float)outerRadius, std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f));
+			}
+		}
+		actorData->heatSourceLock.unlock();
+	}
+	storage->mtx.unlock();
 	storage->heatSourceListLock.unlock();
 }
 
 void ColdFX::Update(RE::Actor* a_actor, float a_delta)
 {
-	if (a_actor->currentProcess->InHighProcess()) {
-		auto dataStorage = DataStorage::GetSingleton();
-		auto actorData = dataStorage->GetOrCreateFromCache(a_actor);
+	auto storage = DataStorage::GetSingleton();
+	if (a_actor->currentProcess->InHighProcess() && !a_actor->IsGhost() && !a_actor->currentProcess->cachedValues->booleanValues.any(RE::CachedValues::BooleanValue::kOwnerIsUndead)) {
+		auto actorData = storage->GetOrCreateFromCache(a_actor);
 
-		UpdateActivity(a_actor, actorData);
+		UpdateActivity(a_actor, actorData, a_delta);
 		UpdateLocalTemperature(a_actor, actorData);
+		
+		actorData->heatSourceLock.lock();
+		actorData->hasHeatSource = false;
+		if (auto leftEquipped = a_actor->GetEquippedObject(true)) {
+			if (leftEquipped->As<RE::TESObjectLIGH>()) {
+				actorData->heatSourcePosition = a_actor->GetPosition();
+				actorData->hasHeatSource = true;
+			}
+		}
+		actorData->heatSourceLock.unlock();
 
 		actorData->breathDelay -= a_delta;
 		if (actorData->breathDelay <= 0.0f) {
+			auto container = storage->GetContainer(a_actor);
 			if (a_actor->IsPlayerRef() && RE::PlayerCamera::GetSingleton()->IsInFirstPerson()) {
-				auto container = DataStorage::GetSingleton()->player1stPerson;
-				a_actor->InstantiateHitArt(container->Breath, container->TempFrequency, nullptr, true, true);
-				actorData->breathDelay = container->TempFrequency / actorData->activityLevel;
+				a_actor->InstantiateHitArt(storage->breathFirstPerson, container->TempFrequency, nullptr, true, true);
 			} else {
-				auto container = dataStorage->GetContainer(a_actor);
-				a_actor->InstantiateHitArt(container->Breath, container->TempFrequency, nullptr, true, false);
-				if (auto creatureData = dynamic_cast<CreatureContainer*>(container.get())) {
-					a_actor->InstantiateHitArt(creatureData->BreathTwo, container->TempFrequency, nullptr, true, false);
-				}
-				actorData->breathDelay = container->TempFrequency / actorData->activityLevel;
+				a_actor->InstantiateHitArt(container->Breath, container->TempFrequency, nullptr, false, false);
+				if (container->BreathTwo)
+					a_actor->InstantiateHitArt(container->BreathTwo, container->TempFrequency, nullptr, false, false);
 			}
+			actorData->breathDelay = container->TempFrequency / actorData->activityLevel;
 		}
 	}
 }
 
 void ColdFX::UpdatePlayer(RE::PlayerCharacter* a_player, float a_delta)
 {
-	ScheduleHeatSourceUpdate();
+	ScheduleHeatSourceUpdate(a_delta);
 	switch (TemperatureMode) {
 	case 0:
 		// undefined behaviour
@@ -137,7 +160,28 @@ void ColdFX::UpdatePlayer(RE::PlayerCharacter* a_player, float a_delta)
 		coldLevel = SunHelmCalculateColdLevel();
 		break;
 	}
+	auto storage = DataStorage::GetSingleton();
+	auto processLists = RE::ProcessLists::GetSingleton();
+	storage->mtx.lock();
+	std::unordered_map<RE::FormID, std::shared_ptr<ActorData>> newCache;
+	for (auto& form : storage->formCache) {
+		for (auto& handle : processLists->highActorHandles) {
+			if (auto actor = handle.get().get()) {
+				if (form.first == actor->formID) {
+					if (!actor->IsGhost() && !actor->IsDead()  && !actor->currentProcess->cachedValues->booleanValues.any(RE::CachedValues::BooleanValue::kOwnerIsUndead))
+						newCache.insert(form);
+				}
+			}
+		}
+	}
+	storage->formCache = newCache;
+	storage->mtx.unlock();
 	Update(a_player, a_delta);
+	for (auto& handle : processLists->highActorHandles) {
+		if (auto actor = handle.get().get()) {
+			Update(actor, a_delta);
+		}
+	}
 	UpdateEffects();
 }
 
@@ -153,9 +197,20 @@ void ColdFX::UpdateEffectMaterialAlpha(RE::NiAVObject* a_object, float a_alpha)
 
 void ColdFX::UpdateActorEffect(RE::ModelReferenceEffect& a_modelEffect)
 {
+	if (!a_modelEffect.Get3D())
+		return;
 	auto storage = DataStorage::GetSingleton();
 	auto actorData = storage->GetOrCreateFromCache(a_modelEffect.controller->GetTargetReference()->As<RE::Actor>());
-	UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), std::clamp((coldLevel * actorData->localTemp) / 5.0f, 0.0f, 1.0f));
+	UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), std::clamp((coldLevel * actorData->localTemp) / 10.0f, 0.0f, 1.0f));
+}
+
+void ColdFX::UpdateFirstPersonEffect(RE::ModelReferenceEffect& a_modelEffect)
+{
+	if (!a_modelEffect.Get3D())
+		return;
+	auto storage = DataStorage::GetSingleton();
+	auto actorData = storage->GetOrCreateFromCache(a_modelEffect.controller->GetTargetReference()->As<RE::Actor>());
+	UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), std::clamp((coldLevel * actorData->localTemp) / 10.0f, 0.0f, 0.5f));
 }
 
 void ColdFX::UpdateEffects()
@@ -167,23 +222,24 @@ void ColdFX::UpdateEffects()
 				if (auto actor = owner->As<RE::Actor>()) {
 					auto storage = DataStorage::GetSingleton();
 					auto container = storage->GetContainer(actor);
-					if (actor->IsPlayerRef()) {
-						if (a_modelEffect.artObject == container->Breath && a_modelEffect.Get3D()) {
-							UpdateActorEffect(a_modelEffect);
-						} else if (a_modelEffect.artObject == storage->player1stPerson->Breath) {
-							auto actorData = storage->GetOrCreateFromCache(actor);
-							if (RE::PlayerCamera::GetSingleton()->IsInFirstPerson()) {
-								UpdateActorEffect(a_modelEffect);
-							} else {
-								UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), 0.0f);
+					if (auto art = a_modelEffect.artObject) {
+						if (actor->IsPlayerRef()) {
+							if (art == container->Breath) {
+								if (RE::PlayerCamera::GetSingleton()->IsInFirstPerson()) {
+									UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), 0.0f);
+								} else {
+									UpdateActorEffect(a_modelEffect);
+								}
+							} else if (art == storage->breathFirstPerson) {
+								if (RE::PlayerCamera::GetSingleton()->IsInFirstPerson()) {
+									UpdateFirstPersonEffect(a_modelEffect);
+								} else {
+									UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), 0.0f);
+								}
 							}
-						}
-					} else if (a_modelEffect.artObject == container->Breath) {
-						if (a_modelEffect.Get3D()) {
+						} else if (art == container->Breath) {
 							UpdateActorEffect(a_modelEffect);
-						}
-					} else if (auto creatureData = dynamic_cast<CreatureContainer*>(container.get())) {
-						if (a_modelEffect.artObject == creatureData->BreathTwo) {
+						} else if (art == container->BreathTwo) {
 							UpdateActorEffect(a_modelEffect);
 						}
 					}
@@ -310,10 +366,13 @@ float ColdFX::GetSurvivalModeColdLevel()
 	return newColdlevel;
 }
 
+//RE::BSLight ColdFX::GetTorch(RE::Actor* a_actor)
+//{
+//}
 
-void ColdFX::ScheduleHeatSourceUpdate()
+void ColdFX::ScheduleHeatSourceUpdate(float a_delta)
 {
-	intervalDelay -= g_deltaTime;
+	intervalDelay -= a_delta;
 	if (intervalDelay <= 0) {
 		SKSE::GetTaskInterface()->AddTask([&]() {
 			auto storage = DataStorage::GetSingleton();
@@ -321,20 +380,39 @@ void ColdFX::ScheduleHeatSourceUpdate()
 			storage->smallHeatSourcePositionCache.clear();
 			storage->normalHeatSourcePositionCache.clear();
 			storage->largeHeatSourcePositionCache.clear();
-			RE::TES::GetSingleton()->ForEachReference([&](RE::TESObjectREFR& a_ref) {
-				if (!a_ref.IsDisabled()) {
-					if (auto baseObject = a_ref.GetBaseObject()) {
-						if (_SHHeatSourceSmall->HasForm(baseObject)) {
-							storage->smallHeatSourcePositionCache.insert(storage->smallHeatSourcePositionCache.end(), a_ref.GetPosition());
-						} else if (_SHHeatSourcesNormal->HasForm(baseObject)) {
-							storage->normalHeatSourcePositionCache.insert(storage->normalHeatSourcePositionCache.end(), a_ref.GetPosition());
-						} else if (_SHHeatSourcesLarge->HasForm(baseObject)) {
-							storage->largeHeatSourcePositionCache.insert(storage->largeHeatSourcePositionCache.end(), a_ref.GetPosition());
+			switch (TemperatureMode) {
+			case 0:
+				// undefined behaviour
+				break;
+			case 1:
+				RE::TES::GetSingleton()->ForEachReference([&](RE::TESObjectREFR& a_ref) {
+					if (!a_ref.IsDisabled()) {
+						if (auto baseObject = a_ref.GetBaseObject()) {
+							if (Survival_WarmUpObjectsList->HasForm(baseObject)) {
+								storage->normalHeatSourcePositionCache.insert(storage->normalHeatSourcePositionCache.end(), a_ref.GetPosition());
+							}
 						}
 					}
-				}
-				return true;
-			});
+					return true;
+				});
+				break;
+			case 2:
+				RE::TES::GetSingleton()->ForEachReference([&](RE::TESObjectREFR& a_ref) {
+					if (!a_ref.IsDisabled()) {
+						if (auto baseObject = a_ref.GetBaseObject()) {
+							if (_SHHeatSourceSmall->HasForm(baseObject)) {
+								storage->smallHeatSourcePositionCache.insert(storage->smallHeatSourcePositionCache.end(), a_ref.GetPosition());
+							} else if (_SHHeatSourcesNormal->HasForm(baseObject)) {
+								storage->normalHeatSourcePositionCache.insert(storage->normalHeatSourcePositionCache.end(), a_ref.GetPosition());
+							} else if (_SHHeatSourcesLarge->HasForm(baseObject)) {
+								storage->largeHeatSourcePositionCache.insert(storage->largeHeatSourcePositionCache.end(), a_ref.GetPosition());
+							}
+						}
+					}
+					return true;
+				});
+				break;
+			}
 			storage->heatSourceListLock.unlock();
 		});
 		intervalDelay = 1.0f;
@@ -459,7 +537,7 @@ float ColdFX::SunHelmCalculateRegionTemp()
 
 float ColdFX::SunHelmCalculateNightPenalty(float a_regionTemp)
 {
-	auto player = RE::PlayerCharacter::GetSingleton();
+	auto  player = RE::PlayerCharacter::GetSingleton();
 	float pen = 0;
 	if (!player->GetParentCell()->IsInteriorCell()) {
 		auto sky = RE::Sky::GetSingleton();
@@ -483,7 +561,7 @@ float ColdFX::SunHelmCalculateNightPenalty(float a_regionTemp)
 float ColdFX::SunHelmCalculateWeatherTemp(RE::TESWeather* a_weather)
 {
 	float weatherTemp = ClearWeatherPen;
-	if (!RE::PlayerCharacter::GetSingleton()->GetParentCell()->IsInteriorCell()) {
+	if (a_weather && !RE::PlayerCharacter::GetSingleton()->GetParentCell()->IsInteriorCell()) {
 		if (_SHColdCloudyWeather->HasForm(a_weather)) {
 			weatherTemp = CloudySnowPen;
 		} else {

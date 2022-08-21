@@ -55,7 +55,7 @@ void Init()
 {
 	auto messaging = SKSE::GetMessagingInterface();
 	messaging->RegisterListener("SKSE", MessageHandler);
-
+	//DataStorage::GetSingleton()->RegisterEvents();
 	Hooks::Install();
 }
 

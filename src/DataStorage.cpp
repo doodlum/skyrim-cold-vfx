@@ -2,29 +2,6 @@
 #include "ColdFX.h"
 
 
-bool TESSwitchRaceCompleteEventEventHandler::Register()
-{
-	static TESSwitchRaceCompleteEventEventHandler singleton;
-	auto                                          ScriptEventSource = RE::ScriptEventSourceHolder::GetSingleton();
-
-	if (!ScriptEventSource) {
-		logger::error("Script event source not found");
-		return false;
-	}
-
-	ScriptEventSource->AddEventSink(&singleton);
-
-	logger::info("Registered {}", typeid(singleton).name());
-
-	return true;
-}
-
-RE::BSEventNotifyControl TESSwitchRaceCompleteEventEventHandler::ProcessEvent(const RE::TESSwitchRaceCompleteEvent* a_event, RE::BSTEventSource<RE::TESSwitchRaceCompleteEvent>*)
-{
-	DataStorage::GetSingleton()->RaceChange(a_event);
-	return RE::BSEventNotifyControl::kContinue;
-}
-
 bool TESFormDeleteEventHandler::Register()
 {
 	static TESFormDeleteEventHandler singleton;
@@ -44,29 +21,60 @@ bool TESFormDeleteEventHandler::Register()
 
 RE::BSEventNotifyControl TESFormDeleteEventHandler::ProcessEvent(const RE::TESFormDeleteEvent* a_event, RE::BSTEventSource<RE::TESFormDeleteEvent>*)
 {
-	DataStorage::GetSingleton()->FormDelete(a_event);
+	DataStorage::GetSingleton()->FormDelete(a_event->formID);
 	return RE::BSEventNotifyControl::kContinue;
 }
 
-void DataStorage::FormDelete(const RE::TESFormDeleteEvent* a_event)
+bool TESCellAttachDetachEventHandler::Register()
+{
+	static TESCellAttachDetachEventHandler singleton;
+	auto                             ScriptEventSource = RE::ScriptEventSourceHolder::GetSingleton();
+
+	if (!ScriptEventSource) {
+		logger::error("Script event source not found");
+		return false;
+	}
+
+	ScriptEventSource->AddEventSink(&singleton);
+
+	logger::info("Registered {}", typeid(singleton).name());
+
+	return true;
+}
+
+RE::BSEventNotifyControl TESCellAttachDetachEventHandler::ProcessEvent(const RE::TESCellAttachDetachEvent*, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*)
+{
+	DataStorage::GetSingleton()->GarbageCollection();
+	return RE::BSEventNotifyControl::kContinue;
+}
+
+void DataStorage::FormDelete(RE::FormID a_formID)
 {
 	mtx.lock();
-	formCache.erase(a_event->formID);
+	formCache.erase(a_formID);
 	mtx.unlock();
 }
 
-void DataStorage::RaceChange(const RE::TESSwitchRaceCompleteEvent* a_event)
+void DataStorage::GarbageCollection()
 {
 	mtx.lock();
-	formCache.erase(a_event->subject.get()->formID);
+	std::unordered_map<RE::FormID, std::shared_ptr<ActorData>> newCache;
+	for (auto& cachedForm : formCache) {
+		if (auto form = RE::TESForm::LookupByID(cachedForm.first))
+			if (auto actor = form->As<RE::Actor>()) {
+				if (actor->currentProcess && actor->currentProcess->InHighProcess() && !actor->IsGhost() && !actor->currentProcess->cachedValues->booleanValues.any(RE::CachedValues::BooleanValue::kOwnerIsUndead))
+					newCache.insert(cachedForm);
+			}
+	}
+	formCache.swap(newCache);
 	mtx.unlock();
 }
+
 
 void DataStorage::RegisterEvents()
 {
-	TESSwitchRaceCompleteEventEventHandler::Register();
-	TESFormDeleteEventHandler::Register();
-	//TESCellAttachDetachEventHandler::Register();
+//	TESFormDeleteEventHandler::Register();
+//	TESCellAttachDetachEventHandler::Register();
 }
 
 void DataStorage::LoadJSON()
@@ -79,12 +87,10 @@ void DataStorage::LoadJSON()
 
 std::shared_ptr<Container> DataStorage::GetContainer(RE::Actor* a_actor)
 {
-	if (humanoidRaceMap.contains(a_actor->GetRace())) {
-		return humanoidRaceMap[a_actor->GetRace()];
-	} else if (creatureRaceMap.contains(a_actor->GetRace())) {
-		return creatureRaceMap[a_actor->GetRace()];
+	if (containerMap.contains(a_actor->GetRace())) {
+		return containerMap[a_actor->GetRace()];
 	}
-	return humanoidDefault;
+	return containerDefault;
 }
 
 std::shared_ptr<ActorData> DataStorage::GetOrCreateFromCache(RE::Actor* a_actor)
@@ -99,7 +105,7 @@ std::shared_ptr<ActorData> DataStorage::GetOrCreateFromCache(RE::Actor* a_actor)
 	std::shared_ptr<ActorData> actordata(new ActorData);
 	auto                       container = GetContainer(a_actor).get();
 
-	actordata.get()->breathDelay = (float) (rand() / (RAND_MAX + 1.) * (container->TempFrequency / 2));
+	actordata.get()->breathDelay = (float) (rand() / (RAND_MAX + 1.) * container->TempFrequency);
 	formCache.insert({ a_actor->formID, actordata });
 	mtx.unlock();
 	return actordata;
@@ -124,45 +130,29 @@ RE::BGSArtObject* DataStorage::GetArtObject(std::string a_editorID)
 void DataStorage::LoadData()
 {
 	LoadJSON();
-
-	std::shared_ptr<Container> playerContainer(new Container);
-	playerContainer->Breath = jsonData["Player"]["1stPerson"] != nullptr ? GetArtObject(jsonData["Player"]["1stPerson"]) : nullptr;
-	playerContainer->TempFrequency = jsonData["Player"]["TempFrequency"];
-
-	player1stPerson = playerContainer;
-
-	for (auto& humanoid : jsonData["Humanoids"]) {
-		std::shared_ptr<HumanoidContainer> container(new HumanoidContainer);
-		container->Breath = humanoid["Breathe"] != nullptr ? GetArtObject(humanoid["Breathe"]) : nullptr;
-		container->BreathFast = humanoid["BreathFast"] != nullptr ? GetArtObject(humanoid["BreathFast"]) : nullptr;
-		container->BreathFrigid = humanoid["BreathFrigid"] != nullptr ? GetArtObject(humanoid["BreathFrigid"]) : nullptr;
-		container->TempFrequency = humanoid["TempFrequency"];
-		mtx.lock();
-		for (auto& race : humanoid["Races"]) {
+	mtx.lock();
+	for (auto& actors : jsonData["Actors"]) {
+		std::shared_ptr<Container> container(new Container);
+		container->Breath = actors["Breathe"] != nullptr ? GetArtObject(actors["Breathe"]) : nullptr;
+		container->BreathFast = actors["BreathFast"] != nullptr ? GetArtObject(actors["BreathFast"]) : nullptr;
+		container->BreathFrigid = actors["BreathFrigid"] != nullptr ? GetArtObject(actors["BreathFrigid"]) : nullptr;
+		container->BreathTwo = actors["BreathTwo"] != nullptr ? GetArtObject(actors["BreathTwo"]) : nullptr;
+		container->TempFrequency = actors["TempFrequency"] != nullptr ? (float) actors["TempFrequency"] : 1.0f;
+		for (auto& race : actors["Races"]) {
 			if (race == "Default")
-				humanoidDefault = container;
-			humanoidRaceMap.insert({ GetRace(race), container });
+				containerDefault = container;
+			else
+				containerMap.insert({ GetRace(race), container });
 		}
-		mtx.unlock();
 	}
-
-	for (auto& creature : jsonData["Creatures"]) {
-		std::shared_ptr<CreatureContainer> container(new CreatureContainer);
-		container->Breath = creature["Breathe"] != nullptr ? GetArtObject(creature["Breathe"]) : nullptr;
-		container->BreathTwo = creature["BreathTwo"] != nullptr ? GetArtObject(creature["BreathTwo"]) : nullptr;
-		container->TempFrequency = creature["TempFrequency"];
-		mtx.lock();
-		for (auto& race : creature["Races"])
-			creatureRaceMap.insert({ GetRace(race), container });
-		mtx.unlock();
-	}
+	breathFirstPerson = jsonData["Player"]["FirstPerson"]["Breath"] != nullptr ? GetArtObject(jsonData["Player"]["FirstPerson"]["Breath"]) : nullptr;
+	mtx.unlock();
 }
 
 void DataStorage::ResetData()
 {
 	mtx.lock();
-	humanoidRaceMap.clear();
-	creatureRaceMap.clear();
+	containerMap.clear();
 	mtx.unlock();
 }
 
@@ -184,3 +174,4 @@ void DataStorage::ResetData()
 //	}
 //	heatSourceListLock.unlock();
 //}
+
