@@ -104,8 +104,6 @@ void ColdFX::UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorDat
 	}
 }
 
- std::chrono::time_point<std::chrono::system_clock> m_StartTime = std::chrono::system_clock::now();
-
 void ColdFX::UpdateActor(RE::Actor* a_actor, float a_delta)
 {
 	auto storage = DataStorage::GetSingleton();
@@ -128,16 +126,8 @@ void ColdFX::UpdateActor(RE::Actor* a_actor, float a_delta)
 		if (actorData->breathDelay <= 0.0f) {
 			auto container = storage->GetContainer(a_actor);
 			if (a_actor->IsPlayerRef() && RE::PlayerCamera::GetSingleton()->IsInFirstPerson()) {
-				auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - m_StartTime).count();
-				logger::debug("Time between breaths (ms: {}", milliseconds);
 				a_actor->InstantiateHitArt(storage->breathFirstPerson, container->TempFrequency, nullptr, true, true);
-				m_StartTime = std::chrono::system_clock::now();
 			} else {
-				if (a_actor->IsPlayerRef()) {
-					auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - m_StartTime).count();
-					logger::debug("Time between breaths (ms: {}", milliseconds);
-					m_StartTime = std::chrono::system_clock::now();
-				}
 				a_actor->InstantiateHitArt(container->Breath, container->TempFrequency, nullptr, false, false);
 				if (container->BreathTwo)
 					a_actor->InstantiateHitArt(container->BreathTwo, container->TempFrequency, nullptr, false, false);
