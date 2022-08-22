@@ -22,8 +22,6 @@
 //#define MAGIC_ENUM_RANGE_MAX 256
 //#include <magic_enum.hpp>
 
-#include "srell.hpp"
-
 #include <ShlObj_core.h>
 
 #ifdef NDEBUG
