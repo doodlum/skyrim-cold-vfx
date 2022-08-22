@@ -24,7 +24,7 @@ namespace ColdFXData
 		float breathDelay = 0;
 		float activityLevel = 1.0f;
 		float localTemp = 0;
-		std::shared_mutex heatSourceLock; 
+		//std::shared_mutex heatSourceLock; 
 		bool hasHeatSource = false;
 		RE::NiPoint3 heatSourcePosition;
 	};
@@ -39,12 +39,12 @@ public:
 	static bool                      Register();
 };
 
-class TESCellAttachDetachEventHandler : public RE::BSTEventSink<RE::TESCellAttachDetachEvent>
-{
-public:
-	virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>* a_eventSource);
-	static bool                      Register();
-};
+//class TESCellAttachDetachEventHandler : public RE::BSTEventSink<RE::TESCellAttachDetachEvent>
+//{
+//public:
+//	virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>* a_eventSource);
+//	static bool                      Register();
+//};
 
 class DataStorage
 {
@@ -62,7 +62,7 @@ public:
 
 	bool debugDrawHeatSources = true;
 
-	std::shared_mutex       heatSourceListLock;
+//	std::shared_mutex       heatSourceListLock;
 	std::list<RE::NiPoint3> smallHeatSourcePositionCache;
 	std::list<RE::NiPoint3> normalHeatSourcePositionCache;
 	std::list<RE::NiPoint3> largeHeatSourcePositionCache;
@@ -75,6 +75,10 @@ public:
 	std::unordered_map<RE::FormID, std::shared_ptr<ActorData>> formCache;
 
 	std::shared_ptr<Container> GetContainer(RE::Actor* a_actor);
+
+	void                       EraseCache();
+	void                       DeleteFromCache(RE::FormID a_formID);
+	void                       GarbageCollectCache();
 	std::shared_ptr<ActorData> GetOrCreateFromCache(RE::Actor* a_actor);
 
 	RE::TESRace*      GetRace(std::string a_editorID);
@@ -83,8 +87,7 @@ public:
 	void LoadData();
 	void ResetData();
 
-	void FormDelete(RE::FormID a_formID);
-	void GarbageCollection();
+
 
 	void RegisterEvents();
 };

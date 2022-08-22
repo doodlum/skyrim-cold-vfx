@@ -2,11 +2,9 @@
 #include "DataStorage.h"
 #include "Hooks.h"
 
-#include "API/ENBSeriesAPI.h"
 #include "TrueHUDAPI.h"
 
 TRUEHUD_API::IVTrueHUD3* g_TrueHUDInterface = nullptr;
-ENB_API::ENBSDKALT1001*  g_ENB = nullptr;
 
 static void MessageHandler(SKSE::MessagingInterface::Message* message)
 {
@@ -24,28 +22,10 @@ static void MessageHandler(SKSE::MessagingInterface::Message* message)
 			} else {
 				logger::warn("Failed to obtain TrueHUD API");
 			}
-
-			g_ENB = reinterpret_cast<ENB_API::ENBSDKALT1001*>(ENB_API::RequestENBAPI(ENB_API::SDKVersion::V1001));
-			if (g_ENB) {
-				logger::info("Obtained ENB API");
-				g_ENB->SetCallbackFunction([](ENBCallbackType calltype) {
-					switch (calltype) {
-					case ENBCallbackType::ENBCallback_PostLoad:
-						//ShadowBoost::GetSingleton()->LoadJSON();
-						break;
-					case ENBCallbackType::ENBCallback_PreSave:
-						//ShadowBoost::GetSingleton()->SaveJSON();
-						break;
-					default:
-						//ColdFX::GetSingleton()->UpdateUI();
-						break;
-					}
-				});
-			} else
-				logger::info("Unable to acquire ENB API");
-
 			break;
 		}
+	case SKSE::MessagingInterface::kPreLoadGame:
+		DataStorage::GetSingleton()->EraseCache();
 	default:
 		break;
 	}
@@ -55,7 +35,7 @@ void Init()
 {
 	auto messaging = SKSE::GetMessagingInterface();
 	messaging->RegisterListener("SKSE", MessageHandler);
-	//DataStorage::GetSingleton()->RegisterEvents();
+	DataStorage::GetSingleton()->RegisterEvents();
 	Hooks::Install();
 }
 

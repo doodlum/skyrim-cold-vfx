@@ -1,7 +1,6 @@
 #include "DataStorage.h"
 #include "ColdFX.h"
 
-
 bool TESFormDeleteEventHandler::Register()
 {
 	static TESFormDeleteEventHandler singleton;
@@ -21,68 +20,103 @@ bool TESFormDeleteEventHandler::Register()
 
 RE::BSEventNotifyControl TESFormDeleteEventHandler::ProcessEvent(const RE::TESFormDeleteEvent* a_event, RE::BSTEventSource<RE::TESFormDeleteEvent>*)
 {
-	DataStorage::GetSingleton()->FormDelete(a_event->formID);
+	DataStorage::GetSingleton()->DeleteFromCache(a_event->formID);
 	return RE::BSEventNotifyControl::kContinue;
 }
+//
+//bool TESCellAttachDetachEventHandler::Register()
+//{
+//	static TESCellAttachDetachEventHandler singleton;
+//	auto                                   ScriptEventSource = RE::ScriptEventSourceHolder::GetSingleton();
+//
+//	if (!ScriptEventSource) {
+//		logger::error("Script event source not found");
+//		return false;
+//	}
+//
+//	ScriptEventSource->AddEventSink(&singleton);
+//
+//	logger::info("Registered {}", typeid(singleton).name());
+//
+//	return true;
+//}
+//
+//RE::BSEventNotifyControl TESCellAttachDetachEventHandler::ProcessEvent(const RE::TESCellAttachDetachEvent*, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*)
+//{
+//	DataStorage::GetSingleton()->GarbageCollection();
+//	return RE::BSEventNotifyControl::kContinue;
+//}
 
-bool TESCellAttachDetachEventHandler::Register()
+void DataStorage::EraseCache()
 {
-	static TESCellAttachDetachEventHandler singleton;
-	auto                             ScriptEventSource = RE::ScriptEventSourceHolder::GetSingleton();
-
-	if (!ScriptEventSource) {
-		logger::error("Script event source not found");
-		return false;
-	}
-
-	ScriptEventSource->AddEventSink(&singleton);
-
-	logger::info("Registered {}", typeid(singleton).name());
-
-	return true;
+	std::lock_guard<std::shared_mutex> lk(mtx);
+	formCache.clear();
 }
 
-RE::BSEventNotifyControl TESCellAttachDetachEventHandler::ProcessEvent(const RE::TESCellAttachDetachEvent*, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*)
+void DataStorage::DeleteFromCache(RE::FormID a_formID)
 {
-	DataStorage::GetSingleton()->GarbageCollection();
-	return RE::BSEventNotifyControl::kContinue;
-}
-
-void DataStorage::FormDelete(RE::FormID a_formID)
-{
-	mtx.lock();
+	std::lock_guard<std::shared_mutex> lk(mtx);
 	formCache.erase(a_formID);
-	mtx.unlock();
 }
 
-void DataStorage::GarbageCollection()
+void DataStorage::GarbageCollectCache()
 {
-	mtx.lock();
-	std::unordered_map<RE::FormID, std::shared_ptr<ActorData>> newCache;
-	for (auto& cachedForm : formCache) {
-		if (auto form = RE::TESForm::LookupByID(cachedForm.first))
-			if (auto actor = form->As<RE::Actor>()) {
-				if (actor->currentProcess && actor->currentProcess->InHighProcess() && !actor->IsGhost() && !actor->currentProcess->cachedValues->booleanValues.any(RE::CachedValues::BooleanValue::kOwnerIsUndead))
-					newCache.insert(cachedForm);
+	std::lock_guard<std::shared_mutex> lk(mtx);
+	auto                               processLists = RE::ProcessLists::GetSingleton();
+	auto                               player = RE::PlayerCharacter::GetSingleton();
+	for (auto it = formCache.cbegin(); it != formCache.cend() /* not hoisted */; /* no increment */) {
+		bool       must_delete = true;
+		auto       formID = it->first;
+		RE::Actor* foundActor = nullptr;
+		if (formID == player->formID) {
+			foundActor = player;
+		} else {
+			for (auto& handle : processLists->highActorHandles) {
+				auto actor = handle.get();
+				if (formID == actor->formID) {
+					foundActor = actor.get();
+					break;
+				}
 			}
+		}
+		if (foundActor) {
+			if (!foundActor->IsGhost() && !foundActor->IsDead() && !foundActor->currentProcess->cachedValues->booleanValues.any(RE::CachedValues::BooleanValue::kOwnerIsUndead)) {
+				must_delete = false;
+			}
+		}
+		if (must_delete) {
+			formCache.erase(it++);
+		} else {
+			++it;
+		}
 	}
-	formCache.swap(newCache);
-	mtx.unlock();
 }
 
+std::shared_ptr<ActorData> DataStorage::GetOrCreateFromCache(RE::Actor* a_actor)
+{
+	std::lock_guard<std::shared_mutex> lk(mtx);
+	if (formCache.contains(a_actor->formID)) {
+		auto actorData = formCache.at(a_actor->formID);
+		return actorData;
+	}
+
+	std::shared_ptr<ActorData> actordata(new ActorData);
+	auto                       container = GetContainer(a_actor).get();
+
+	actordata.get()->breathDelay = (float)(rand() / (RAND_MAX + 1.) * container->TempFrequency);
+	formCache.insert({ a_actor->formID, actordata });
+	return actordata;
+}
 
 void DataStorage::RegisterEvents()
 {
-//	TESFormDeleteEventHandler::Register();
-//	TESCellAttachDetachEventHandler::Register();
+	TESFormDeleteEventHandler::Register();
 }
 
 void DataStorage::LoadJSON()
 {
-	mtx.lock();
 	std::ifstream i(L"Data\\SKSE\\Plugins\\ColdFX.json");
 	i >> jsonData;
-	mtx.unlock();
 }
 
 std::shared_ptr<Container> DataStorage::GetContainer(RE::Actor* a_actor)
@@ -93,23 +127,6 @@ std::shared_ptr<Container> DataStorage::GetContainer(RE::Actor* a_actor)
 	return containerDefault;
 }
 
-std::shared_ptr<ActorData> DataStorage::GetOrCreateFromCache(RE::Actor* a_actor)
-{
-	mtx.lock();
-	if (formCache.contains(a_actor->formID)) {
-		auto actorData = formCache.at(a_actor->formID);
-		mtx.unlock();
-		return actorData;
-	}
-
-	std::shared_ptr<ActorData> actordata(new ActorData);
-	auto                       container = GetContainer(a_actor).get();
-
-	actordata.get()->breathDelay = (float) (rand() / (RAND_MAX + 1.) * container->TempFrequency);
-	formCache.insert({ a_actor->formID, actordata });
-	mtx.unlock();
-	return actordata;
-}
 
 RE::TESRace* DataStorage::GetRace(std::string a_editorID)
 {
@@ -130,14 +147,13 @@ RE::BGSArtObject* DataStorage::GetArtObject(std::string a_editorID)
 void DataStorage::LoadData()
 {
 	LoadJSON();
-	mtx.lock();
 	for (auto& actors : jsonData["Actors"]) {
 		std::shared_ptr<Container> container(new Container);
 		container->Breath = actors["Breathe"] != nullptr ? GetArtObject(actors["Breathe"]) : nullptr;
 		container->BreathFast = actors["BreathFast"] != nullptr ? GetArtObject(actors["BreathFast"]) : nullptr;
 		container->BreathFrigid = actors["BreathFrigid"] != nullptr ? GetArtObject(actors["BreathFrigid"]) : nullptr;
 		container->BreathTwo = actors["BreathTwo"] != nullptr ? GetArtObject(actors["BreathTwo"]) : nullptr;
-		container->TempFrequency = actors["TempFrequency"] != nullptr ? (float) actors["TempFrequency"] : 1.0f;
+		container->TempFrequency = actors["TempFrequency"] != nullptr ? (float)actors["TempFrequency"] : 1.0f;
 		for (auto& race : actors["Races"]) {
 			if (race == "Default")
 				containerDefault = container;
@@ -146,32 +162,9 @@ void DataStorage::LoadData()
 		}
 	}
 	breathFirstPerson = jsonData["Player"]["FirstPerson"]["Breath"] != nullptr ? GetArtObject(jsonData["Player"]["FirstPerson"]["Breath"]) : nullptr;
-	mtx.unlock();
 }
 
 void DataStorage::ResetData()
 {
-	mtx.lock();
 	containerMap.clear();
-	mtx.unlock();
 }
-
-//RE::BSEventNotifyControl TESCellAttachDetachEventHandler::ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*)
-//{
-//	DataStorage::GetSingleton()->ProcessCellChange(a_event->reference->As<RE::TESObjectCELL>(), a_event->attached == 1);
-//	return RE::BSEventNotifyControl::kContinue;
-//}
-//
-//void DataStorage::ProcessCellChange(RE::TESObjectCELL* a_cell, bool attached) {
-//	heatSourceListLock.lock();
-//	if (!attached) {
-//		heatSourceList.erase(a_cell);
-//	} else {
-//		std::list<RE::TESObjectREFR*> list;
-//		a_cell->ForEachReference([](RE::TESObjectREFR& a_ref) { 
-//
-//		})
-//	}
-//	heatSourceListLock.unlock();
-//}
-

@@ -17,7 +17,6 @@ public:
 		static ColdFX avInterface;
 		return &avInterface;
 	}
-
 	
 	void GetSurvivalModeGameForms();
 	void GetSunHelmGameForms();
@@ -30,7 +29,7 @@ protected:
 			static void thunk(RE::PlayerCharacter* a_player, float a_delta)
 			{
 				func(a_player, a_delta);
-				GetSingleton()->UpdatePlayer(a_player, g_deltaTime);
+				GetSingleton()->UpdateActor(a_player, g_deltaTime);
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
@@ -40,28 +39,39 @@ protected:
 			static void thunk(RE::Actor* a_actor, float a_delta)
 			{
 				func(a_actor, a_delta);
-				GetSingleton()->Update(a_actor, g_deltaTime);
+				GetSingleton()->UpdateActor(a_actor, g_deltaTime);
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
 
-		struct ProcessLists_Player
+		//struct ProcessLists_Player
+		//{
+		//	static INT64 thunk(RE::PlayerCharacter* a_player, float unk1, char unk2)
+		//	{
+		//		INT64 res = func(a_player, unk1, unk2);
+		//		GetSingleton()->UpdatePlayer(a_player, g_deltaTime);
+		//		return res;
+		//	}
+		//	static inline REL::Relocation<decltype(thunk)> func;
+		//};
+
+		struct MainUpdate_Nullsub
 		{
-			static INT64 thunk(RE::PlayerCharacter* a_player, float unk1, char unk2)
+			static void thunk()
 			{
-				INT64 res = func(a_player, unk1, unk2);
-				GetSingleton()->UpdatePlayer(a_player, g_deltaTime);
-				return res;
+				func();
+				GetSingleton()->Update(g_deltaTime);
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
+
 
 		static void Install()
 		{
 		//	stl::write_vfunc<RE::PlayerCharacter, 0xAD, PlayerCharacter_Update>();
 		//	stl::write_vfunc<RE::Character, 0xAD, Character_Update>();
-			stl::write_thunk_jump<ProcessLists_Player>(RELOCATION_ID(38107, 39063).address() + REL::Relocate(0xD, 0xD));
-
+			//stl::write_thunk_jump<ProcessLists_Player>(RELOCATION_ID(38107, 39063).address() + REL::Relocate(0xD, 0xD));
+			stl::write_thunk_jump<MainUpdate_Nullsub>(REL::RelocationID(35565, 36564).address() + REL::Relocate(0x748, 0xC26));
 		}
 	};
 
@@ -204,8 +214,8 @@ private:
 	void UpdateEffectMaterialAlpha(RE::NiAVObject* a_object, float a_alpha);
 	void UpdateActorEffect(RE::ModelReferenceEffect& a_modelEffect);
 	void UpdateFirstPersonEffect(RE::ModelReferenceEffect& a_modelEffect);
-	void Update(RE::Actor* a_actor, float a_delta);
-	void UpdatePlayer(RE::PlayerCharacter* a_player, float a_delta);
+	void UpdateActor(RE::Actor* a_actor, float a_delta);
+	void Update(float a_delta);
 
 	float    intervalDelay = 0;
 	void  ScheduleHeatSourceUpdate(float a_delta);
