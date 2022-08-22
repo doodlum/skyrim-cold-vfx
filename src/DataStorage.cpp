@@ -73,7 +73,7 @@ void DataStorage::GarbageCollectCache()
 		} else {
 			for (auto& handle : processLists->highActorHandles) {
 				auto actor = handle.get();
-				if (formID == actor->formID) {
+				if (actor && formID == actor->formID) {
 					foundActor = actor.get();
 					break;
 				}
