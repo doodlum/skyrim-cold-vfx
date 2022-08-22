@@ -104,21 +104,19 @@ void ColdFX::UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorDat
 	}
 }
 
+
+
 void ColdFX::UpdateActor(RE::Actor* a_actor, float a_delta)
 {
 	auto storage = DataStorage::GetSingleton();
 
 	if (a_actor->currentProcess->InHighProcess() && !a_actor->IsGhost() && !a_actor->currentProcess->cachedValues->booleanValues.any(RE::CachedValues::BooleanValue::kOwnerIsUndead)) {
 		auto actorData = storage->GetOrCreateFromCache(a_actor);
-		
-		actorData->hasHeatSource = false;
-		if (auto leftEquipped = a_actor->GetEquippedObject(true)) {
-			if (leftEquipped->As<RE::TESObjectLIGH>()) {
-				actorData->heatSourcePosition = a_actor->GetPosition();
-				actorData->hasHeatSource = true;
-			}
+
+		if (actorData->hasHeatSource) {
+			actorData->heatSourcePosition = a_actor->GetPosition();
 		}
-	
+
 		UpdateActivity(a_actor, actorData, a_delta);
 		UpdateLocalTemperature(a_actor, actorData);
 
@@ -353,6 +351,18 @@ float ColdFX::GetSurvivalModeColdLevel()
 	return newColdlevel;
 }
 
+bool ColdFX::SpellHasFireEffect(RE::SpellItem* a_spell)
+{
+	if (a_spell) {
+		for (const auto& effect : a_spell->effects) {
+			if (effect->baseEffect->data.resistVariable == RE::ActorValue::kResistFire) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 void ColdFX::ScheduleHeatSourceUpdate(float a_delta)
 {
 	intervalDelay -= a_delta;
@@ -371,6 +381,35 @@ void ColdFX::ScheduleHeatSourceUpdate(float a_delta)
 					if (auto baseObject = a_ref.GetBaseObject()) {
 						if (Survival_WarmUpObjectsList->HasForm(baseObject)) {
 							storage->normalHeatSourcePositionCache.insert(storage->normalHeatSourcePositionCache.end(), a_ref.GetPosition());
+							return true;
+						} else if (auto hazard = baseObject->As<RE::BGSHazard>()) {
+							if (SpellHasFireEffect(hazard->data.spell)) {
+								storage->smallHeatSourcePositionCache.insert(storage->smallHeatSourcePositionCache.end(), a_ref.GetPosition());
+								return true;
+							}
+						}
+						if (auto actor = a_ref.As<RE::Actor>()) {
+							auto actorData = storage->GetOrCreateFromCache(actor);
+							actorData->hasHeatSource = false;
+							bool hasHeatSource = false;
+							if (auto leftEquipped = actor->GetEquippedObject(true)) {
+								if (leftEquipped->As<RE::TESObjectLIGH>()) {
+									hasHeatSource = true;
+								}
+							}
+							if (!hasHeatSource) {
+								if (auto effects = actor->GetActiveEffectList()) {
+									RE::EffectSetting* setting = nullptr;
+									for (auto& effect : *effects) {
+										setting = effect ? effect->GetBaseObject() : nullptr;
+										if (setting && setting->HasArchetype(RE::MagicTarget::Archetype::kCloak) && setting->data.resistVariable == RE::ActorValue::kResistFire) {
+											hasHeatSource = true;
+											break;
+										}
+									}
+								}
+							}
+							actorData->hasHeatSource = hasHeatSource;
 						}
 					}
 				}

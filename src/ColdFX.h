@@ -218,6 +218,7 @@ private:
 	void Update(float a_delta);
 
 	float    intervalDelay = 0;
+	bool  SpellHasFireEffect(RE::SpellItem* a_spell);
 	void  ScheduleHeatSourceUpdate(float a_delta);
 
 	void DebugCurrentHeatGetValueBetweenTwoFixedColors(float value, uint8_t& red, uint8_t& green, uint8_t& blue);
