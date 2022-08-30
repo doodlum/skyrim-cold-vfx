@@ -25,7 +25,7 @@ namespace ColdFXData
 		float activityLevel = 1.0f;
 		float localTemp = 0;
 		//std::shared_mutex heatSourceLock; 
-		bool hasHeatSource = false;
+		float heat = 0;
 		RE::NiPoint3 heatSourcePosition;
 	};
 }
@@ -62,10 +62,14 @@ public:
 
 	bool debugDrawHeatSources = true;
 
-//	std::shared_mutex       heatSourceListLock;
-	std::list<RE::NiPoint3> smallHeatSourcePositionCache;
-	std::list<RE::NiPoint3> normalHeatSourcePositionCache;
-	std::list<RE::NiPoint3> largeHeatSourcePositionCache;
+	struct HeatSourceData
+	{
+		RE::NiPoint3 position;
+		float        radius;
+		float        heat;
+	};
+
+	std::list<HeatSourceData> heatSourceCache;
 
 	RE::BGSArtObject* breathFirstPerson;
 

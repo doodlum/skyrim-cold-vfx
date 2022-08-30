@@ -217,12 +217,13 @@ private:
 	void UpdateActor(RE::Actor* a_actor, float a_delta);
 	void Update(float a_delta);
 
-	float    intervalDelay = 0;
 	bool  SpellHasFireEffect(RE::SpellItem* a_spell);
+	bool  SpellHasColdEffect(RE::SpellItem* a_spell);
+	float intervalDelay = 0;
 	void  ScheduleHeatSourceUpdate(float a_delta);
 
 	void DebugCurrentHeatGetValueBetweenTwoFixedColors(float value, uint8_t& red, uint8_t& green, uint8_t& blue);
 	uint32_t DebugCreateRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
-	void     DebugDrawHeatSource(RE::NiPoint3 a_position, float a_innerRadius, float a_outerRadius, float a_heat);
+	void     DebugDrawHeatSource(RE::NiPoint3 a_position, float a_innerRadius, float a_outerRadius, float a_heat, float a_heatPct);
 
 };
