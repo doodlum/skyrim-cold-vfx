@@ -17,7 +17,7 @@ public:
 		static ColdFX avInterface;
 		return &avInterface;
 	}
-	
+
 	void GetSurvivalModeGameForms();
 	void GetSunHelmGameForms();
 
@@ -44,17 +44,6 @@ protected:
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
 
-		//struct ProcessLists_Player
-		//{
-		//	static INT64 thunk(RE::PlayerCharacter* a_player, float unk1, char unk2)
-		//	{
-		//		INT64 res = func(a_player, unk1, unk2);
-		//		GetSingleton()->UpdatePlayer(a_player, g_deltaTime);
-		//		return res;
-		//	}
-		//	static inline REL::Relocation<decltype(thunk)> func;
-		//};
-
 		struct MainUpdate_Nullsub
 		{
 			static void thunk()
@@ -65,18 +54,13 @@ protected:
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
 
-
 		static void Install()
 		{
-		//	stl::write_vfunc<RE::PlayerCharacter, 0xAD, PlayerCharacter_Update>();
-		//	stl::write_vfunc<RE::Character, 0xAD, Character_Update>();
-			//stl::write_thunk_jump<ProcessLists_Player>(RELOCATION_ID(38107, 39063).address() + REL::Relocate(0xD, 0xD));
 			stl::write_thunk_jump<MainUpdate_Nullsub>(REL::RelocationID(35565, 36564).address() + REL::Relocate(0x748, 0xC26));
 		}
 	};
 
 private:
-
 	// Shared
 
 	float ConvertClimateTimeToGameTime(std::uint8_t a_time);
@@ -110,6 +94,9 @@ private:
 	float coldLevelWarmArea = 0;
 	float coldLevelFreezingArea = 6;
 
+	float const heatSourceMax = 5;
+	float const coldSourceMax = 5;
+
 	enum class AREA_TYPE
 	{
 		kAreaTypeChillyInterior = -1,
@@ -122,87 +109,6 @@ private:
 	AREA_TYPE GetSurvivalModeAreaType();
 	float     GetSurvivalModeWeatherColdLevel(RE::TESWeather* a_weather);
 	float     GetSurvivalModeColdLevel();
-
-	// SunHelm Survival
-
-	RE::BGSListForm* _SHHeatSourceSmall;
-	RE::BGSListForm* _SHHeatSourcesNormal;
-	RE::BGSListForm* _SHHeatSourcesLarge;
-
-	RE::BGSListForm* _SHColdCloudyWeather;
-	RE::BGSListForm* _SHBlizzardWeathers;
-
-	RE::BGSListForm* _SHInteriorWorldSpaces;
-	RE::BGSListForm* _SHColdInteriors;
-
-	RE::TESCondition* volcanicRegion;
-	RE::TESCondition* marshRegion;
-	RE::TESCondition* throatRegion;
-	RE::TESCondition* pineRegion;
-	RE::TESCondition* comfRegion;
-	RE::TESCondition* freezingRegion;
-	RE::TESCondition* highHrothgarRegion;
-	RE::TESCondition* reachRegion;
-	RE::TESCondition* coolRegion;
-
-	float _SHFreezingTemp = 250;
-	float _SHCoolTemp = 125;
-	float _SHReachTemp = 100;
-	float _SHComfTemp = 35;
-	float _SHMarshTemp = 150;
-	float _SHVolcanicTemp = 25;
-	float _SHThroatFreezeTemp = 450;
-	float _SHWarmTemp = 0;
-
-	float SeasonMult[12];
-
-	int _SHInInteriorType = -1;
-
-	float SnowWeatherPen = 250;
-	float BlizzardWeatherPen = 500;
-	float CloudySnowPen = 100;
-	float RainWeatherPen = 50;
-	float ClearWeatherPen = 0;
-
-	float _SHFreezingNightPen = 100;
-	float _SHCoolNightPen = 50;
-	float _SHWarmNightPen = 25;
-
-	float _SHColdLevelCap = 900;
-
-
-
-	enum class REGION_TYPE
-	{
-		VOLCANIC,
-		MARSH,
-		THROAT,
-		PINE,
-		COMF,
-		FREEZING,
-		REACH,
-		COOL,
-		WARMINTERIOR,
-		COLDINTERIOR
-	};
-
-	static RE::TESWeather* Sky_FindWeatherImpl(RE::Sky* a_sky, uint32_t auiType)
-	{
-		using func_t = decltype(&Sky_FindWeatherImpl);
-		REL::Relocation<func_t> func{ REL::RelocationID(25709, 26256) };
-		return func(a_sky, auiType);
-	}
-	static RE::TESWeather* Sky_FindWeather(uint32_t auiType)
-	{
-		return Sky_FindWeatherImpl(RE::Sky::GetSingleton(), auiType);
-	}
-
-	REGION_TYPE SunHelmMakeUnknownRegionGuess();
-	REGION_TYPE SunHelmGetCurrentRegion();
-	float       SunHelmCalculateRegionTemp();
-	float       SunHelmCalculateNightPenalty(float a_regionTemp);
-	float       SunHelmCalculateWeatherTemp(RE::TESWeather* a_weather);
-	float       SunHelmCalculateColdLevel();
 
 	// System
 
@@ -222,8 +128,7 @@ private:
 	float intervalDelay = 0;
 	void  ScheduleHeatSourceUpdate(float a_delta);
 
-	void DebugCurrentHeatGetValueBetweenTwoFixedColors(float value, uint8_t& red, uint8_t& green, uint8_t& blue);
+	void     DebugCurrentHeatGetValueBetweenTwoFixedColors(float value, uint8_t& red, uint8_t& green, uint8_t& blue);
 	uint32_t DebugCreateRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 	void     DebugDrawHeatSource(RE::NiPoint3 a_position, float a_innerRadius, float a_outerRadius, float a_heat, float a_heatPct);
-
 };
