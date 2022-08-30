@@ -123,8 +123,6 @@ private:
 	void UpdateActor(RE::Actor* a_actor, float a_delta);
 	void Update(float a_delta);
 
-	bool  SpellHasFireEffect(RE::SpellItem* a_spell);
-	bool  SpellHasColdEffect(RE::SpellItem* a_spell);
 	float intervalDelay = 0;
 	void  ScheduleHeatSourceUpdate(float a_delta);
 

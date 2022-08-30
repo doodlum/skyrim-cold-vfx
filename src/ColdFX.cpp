@@ -334,30 +334,6 @@ float ColdFX::GetSurvivalModeColdLevel()
 	return newColdlevel;
 }
 
-bool ColdFX::SpellHasFireEffect(RE::SpellItem* a_spell)
-{
-	if (a_spell) {
-		for (const auto& effect : a_spell->effects) {
-			if (effect->baseEffect->data.resistVariable == RE::ActorValue::kResistFire) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-bool ColdFX::SpellHasColdEffect(RE::SpellItem* a_spell)
-{
-	if (a_spell) {
-		for (const auto& effect : a_spell->effects) {
-			if (effect->baseEffect->data.resistVariable == RE::ActorValue::kResistFrost) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
 void ColdFX::ScheduleHeatSourceUpdate(float a_delta)
 {
 	intervalDelay -= a_delta;
