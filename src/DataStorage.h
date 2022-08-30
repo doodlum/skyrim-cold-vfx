@@ -23,8 +23,8 @@ namespace ColdFXData
 	public:
 		float breathDelay = 0;
 		float activityLevel = 1.0f;
+		float dispersalPercent = 0.0f;
 		float localTemp = 0;
-		//std::shared_mutex heatSourceLock; 
 		float heat = 0;
 		RE::NiPoint3 heatSourcePosition;
 	};

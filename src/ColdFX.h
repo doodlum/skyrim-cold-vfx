@@ -128,4 +128,5 @@ private:
 	void     DebugCurrentHeatGetValueBetweenTwoFixedColors(float value, uint8_t& red, uint8_t& green, uint8_t& blue);
 	uint32_t DebugCreateRGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 	void     DebugDrawHeatSource(RE::NiPoint3 a_position, float a_innerRadius, float a_outerRadius, float a_heat, float a_heatPct);
+	void     DebugDrawDamageNodes(RE::Actor* a_actor);
 };

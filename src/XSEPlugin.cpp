@@ -12,7 +12,6 @@ static void MessageHandler(SKSE::MessagingInterface::Message* message)
 	case SKSE::MessagingInterface::kDataLoaded:
 		DataStorage::GetSingleton()->LoadData();
 		ColdFX::GetSingleton()->GetSurvivalModeGameForms();
-		ColdFX::GetSingleton()->GetSunHelmGameForms();
 		break;
 	case SKSE::MessagingInterface::kPostLoad:
 		{
@@ -25,6 +24,8 @@ static void MessageHandler(SKSE::MessagingInterface::Message* message)
 			break;
 		}
 	case SKSE::MessagingInterface::kPreLoadGame:
+		DataStorage::GetSingleton()->EraseCache();
+	case SKSE::MessagingInterface::kNewGame:
 		DataStorage::GetSingleton()->EraseCache();
 	default:
 		break;
