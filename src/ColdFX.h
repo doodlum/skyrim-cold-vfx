@@ -19,7 +19,6 @@ public:
 	}
 
 	void GetSurvivalModeGameForms();
-	void GetSunHelmGameForms();
 
 protected:
 	struct Hooks
