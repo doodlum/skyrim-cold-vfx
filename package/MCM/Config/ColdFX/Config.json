@@ -1,0 +1,133 @@
+{
+	"modName": "ColdFX",
+	"displayName": "Cold FX",
+	"minMcmVersion": 9,
+	"cursorFillMode": "topToBottom",
+	"content": [
+		{
+			"text": "Sources",
+			"type": "header"
+		},
+		{
+			"id": "iDefaultOuterRadius:Sources",
+			"text": "Default Outer Radius",
+			"type": "slider",
+			"help": "Outer radius of standard heat sources",
+			"valueOptions": {
+				"min": 128,
+				"max": 1024,
+				"step": 1,
+				"sourceType": "ModSettingInt"
+			}
+		},
+		{
+			"id": "iInnerRadiusDivisor:Sources",
+			"text": "Inner Radius Divisor",
+			"type": "slider",
+			"help": "Divisor applied to outer radius. Inner radius is max heat/cold.",
+			"valueOptions": {
+				"min": 1,
+				"max": 10,
+				"step": 1,
+				"sourceType": "ModSettingInt"
+			}
+		},
+		{
+			"id": "iHeatSourceMax:Sources",
+			"text": "Heat Source Max",
+			"type": "slider",
+			"help": "Highest heat value when inside a heat source",
+			"valueOptions": {
+				"min": 1,
+				"max": 20,
+				"step": 1,
+				"sourceType": "ModSettingInt"
+			}
+		},
+		{
+			"id": "iColdSourceMax:Sources",
+			"text": "Cold Source Max",
+			"type": "slider",
+			"help": "Highest cold value when inside a cold source",
+			"valueOptions": {
+				"min": 1,
+				"max": 20,
+				"step": 1,
+				"sourceType": "ModSettingInt"
+			}
+		},
+		{
+			"text": "Breath",
+			"type": "header"
+		},
+		{
+			"id": "fAlphaMultiplier:Breath",
+			"text": "Alpha Multiplier",
+			"type": "slider",
+			"help": "Multipler applied to premultiplied breath effect",
+			"valueOptions": {
+				"min": 0.05,
+				"max": 5.00,
+				"step": 0.05,
+				"formatString": "{2}",
+				"sourceType": "ModSettingFloat"
+			}
+		},
+		{
+			"id": "fAlphaMax:Breath",
+			"text": "Alpha Max",
+			"type": "slider",
+			"help": "Max alpha of breath effect",
+			"valueOptions": {
+				"min": 0.00,
+				"max": 1.00,
+				"step": 0.1,
+				"formatString": "{2}",
+				"sourceType": "ModSettingFloat"
+			}
+		},		
+		{
+			"text": "First-Person Breath",
+			"type": "header"
+		},
+		{
+			"id": "fAlphaMultiplier:FirstPersonBreath",
+			"text": "Alpha Multiplier",
+			"type": "slider",
+			"help": "Multipler applied to premultiplied breath effect",
+			"valueOptions": {
+				"min": 0.05,
+				"max": 5.00,
+				"step": 0.05,
+				"formatString": "{2}",
+				"sourceType": "ModSettingFloat"
+			}
+		},
+		{
+			"id": "fAlphaMax:FirstPersonBreath",
+			"text": "Alpha Max",
+			"type": "slider",
+			"help": "Max alpha of breath effect",
+			"valueOptions": {
+				"min": 0.00,
+				"max": 1.00,
+				"step": 0.1,
+				"formatString": "{2}",
+				"sourceType": "ModSettingFloat"
+			}
+		},
+		{
+			"text": "Debug",
+			"type": "header"
+		},
+		{
+		"id": "bEnabled:Debug",
+		"text": "Enabled",
+		"type": "toggle",
+		"help": "Enable drawing debug objects",
+		"valueOptions": {
+			"sourceType": "ModSettingBool"
+		}}
+		
+	]	
+}

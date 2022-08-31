@@ -1,9 +1,10 @@
+
 #include "ColdFX.h"
 #include "DataStorage.h"
 #include "Hooks.h"
+#include "Papyrus.h"
 
 #include "TrueHUDAPI.h"
-
 TRUEHUD_API::IVTrueHUD3* g_TrueHUDInterface = nullptr;
 
 static void MessageHandler(SKSE::MessagingInterface::Message* message)
@@ -34,10 +35,11 @@ static void MessageHandler(SKSE::MessagingInterface::Message* message)
 
 void Init()
 {
+	Hooks::Install();
+	DataStorage::Register();
+	Papyrus::Register();
 	auto messaging = SKSE::GetMessagingInterface();
 	messaging->RegisterListener("SKSE", MessageHandler);
-	DataStorage::GetSingleton()->RegisterEvents();
-	Hooks::Install();
 }
 
 void InitializeLog()

@@ -8,43 +8,12 @@
 #include <shared_mutex>
 using json = nlohmann::json;
 
-namespace ColdFXData
-{
-	struct Container
-	{
-		RE::BGSArtObject* Breath;
-		RE::BGSArtObject* BreathFast;
-		RE::BGSArtObject* BreathFrigid;
-		RE::BGSArtObject* BreathTwo;
-		float             TempFrequency;
-	};
-	class ActorData
-	{
-	public:
-		float breathDelay = 0;
-		float activityLevel = 1.0f;
-		float dispersalPercent = 0.0f;
-		float localTemp = 0;
-		float heat = 0;
-		RE::NiPoint3 heatSourcePosition;
-	};
-}
-
-using namespace ColdFXData;
-
 class TESFormDeleteEventHandler : public RE::BSTEventSink<RE::TESFormDeleteEvent>
 {
 public:
 	virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESFormDeleteEvent* a_event, RE::BSTEventSource<RE::TESFormDeleteEvent>* a_eventSource);
 	static bool                      Register();
 };
-
-//class TESCellAttachDetachEventHandler : public RE::BSTEventSink<RE::TESCellAttachDetachEvent>
-//{
-//public:
-//	virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>* a_eventSource);
-//	static bool                      Register();
-//};
 
 class DataStorage
 {
@@ -55,18 +24,63 @@ public:
 		return &avInterface;
 	}
 
+	static void Register();
+
+	struct
+	{
+		int iDefaultOuterRadius;
+		int iInnerRadiusDivisor;
+		int iHeatSourceMax;
+		int iColdSourceMax;
+	} Sources;
+
+	struct
+	{
+		float fAlphaMultiplier;
+		float fAlphaMax;
+	} Breath;
+
+	struct
+	{
+		float fAlphaMultiplier;
+		float fAlphaMax;
+	} FirstPersonBreath;
+
+	struct
+	{
+		bool bEnabled;
+	} Debug;
+
+	void LoadSettings();
+
 	std::shared_mutex mtx;
 
 	json jsonData;
 	void LoadJSON();
-
-	bool debugDrawHeatSources = true;
 
 	struct HeatSourceData
 	{
 		RE::NiPoint3 position;
 		float        radius;
 		float        heat;
+	};
+
+	struct Container
+	{
+		RE::BGSArtObject* Breath;
+		RE::BGSArtObject* BreathTwo;
+		float             TempFrequency;
+	};
+	class ActorData
+	{
+	public:
+		float        breathDelay = 0;
+		float        activityLevel = 1.0f;
+		float        dispersalPercent = 0.0f;
+		float        localTemp = 0;
+		float        heat = 0;
+		float        heatRadius = 0;
+		RE::NiPoint3 heatSourcePosition;
 	};
 
 	std::list<HeatSourceData> heatSourceCache;
@@ -91,7 +105,9 @@ public:
 	void LoadData();
 	void ResetData();
 
-
-
-	void RegisterEvents();
+private:
+	DataStorage() {
+		LoadSettings();
+		LoadJSON();
+	}
 };

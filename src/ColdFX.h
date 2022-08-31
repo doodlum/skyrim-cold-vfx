@@ -93,9 +93,6 @@ private:
 	float coldLevelWarmArea = 0;
 	float coldLevelFreezingArea = 6;
 
-	float const heatSourceMax = 5;
-	float const coldSourceMax = 5;
-
 	enum class AREA_TYPE
 	{
 		kAreaTypeChillyInterior = -1,
@@ -113,8 +110,8 @@ private:
 
 	float coldLevel = 0.0f;
 
-	void UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData);
-	void UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData, float a_delta);
+	void UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<DataStorage::ActorData> a_actorData);
+	void UpdateActivity(RE::Actor* a_actor, std::shared_ptr<DataStorage::ActorData> a_actorData, float a_delta);
 	void UpdateEffects();
 	void UpdateEffectMaterialAlpha(RE::NiAVObject* a_object, float a_alpha);
 	void UpdateActorEffect(RE::ModelReferenceEffect& a_modelEffect);

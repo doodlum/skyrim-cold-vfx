@@ -30,8 +30,10 @@ void ColdFX::DebugDrawHeatSource(RE::NiPoint3 a_position, float a_innerRadius, f
 	uint8_t green;
 	uint8_t blue;
 
-	float range = heatSourceMax + coldSourceMax;
-	float heatBalance = (a_heat + coldSourceMax) / range;
+	auto storage = DataStorage::GetSingleton();
+
+	float range = (float)(storage->Sources.iHeatSourceMax + storage->Sources.iColdSourceMax);
+	float heatBalance = (a_heat + storage->Sources.iColdSourceMax) / range;
 
 	DebugCurrentHeatGetValueBetweenTwoFixedColors(heatBalance, red, green, blue);
 	auto innerColor = DebugCreateRGBA(red, green, blue, 64);

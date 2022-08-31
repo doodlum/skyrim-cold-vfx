@@ -1,6 +1,8 @@
 #include "DataStorage.h"
 #include "ColdFX.h"
 
+#include <SimpleIni.h>
+
 bool TESFormDeleteEventHandler::Register()
 {
 	static TESFormDeleteEventHandler singleton;
@@ -23,29 +25,37 @@ RE::BSEventNotifyControl TESFormDeleteEventHandler::ProcessEvent(const RE::TESFo
 	DataStorage::GetSingleton()->DeleteFromCache(a_event->formID);
 	return RE::BSEventNotifyControl::kContinue;
 }
-//
-//bool TESCellAttachDetachEventHandler::Register()
-//{
-//	static TESCellAttachDetachEventHandler singleton;
-//	auto                                   ScriptEventSource = RE::ScriptEventSourceHolder::GetSingleton();
-//
-//	if (!ScriptEventSource) {
-//		logger::error("Script event source not found");
-//		return false;
-//	}
-//
-//	ScriptEventSource->AddEventSink(&singleton);
-//
-//	logger::info("Registered {}", typeid(singleton).name());
-//
-//	return true;
-//}
-//
-//RE::BSEventNotifyControl TESCellAttachDetachEventHandler::ProcessEvent(const RE::TESCellAttachDetachEvent*, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*)
-//{
-//	DataStorage::GetSingleton()->GarbageCollection();
-//	return RE::BSEventNotifyControl::kContinue;
-//}
+
+void DataStorage::Register()
+{
+	TESFormDeleteEventHandler::Register();
+}
+
+void DataStorage::LoadSettings()
+{
+#define GetSettingBool(a_section, a_setting) ini.GetBoolValue(a_section, a_setting, defaults.GetBoolValue(a_section, a_setting));
+#define GetSettingFloat(a_section, a_setting) (float)ini.GetDoubleValue(a_section, a_setting, (float)defaults.GetDoubleValue(a_section, a_setting));
+
+	CSimpleIniA defaults;
+	defaults.SetUnicode();
+	defaults.LoadFile(L"Data\\MCM\\Config\\Settings.ini");
+
+	CSimpleIniA ini;
+	ini.SetUnicode();
+	ini.LoadFile(L"Data\\MCM\\Settings\\ColdFX.ini");
+	Sources.iDefaultOuterRadius = (int)GetSettingFloat("Sources", "iDefaultOuterRadius");
+	Sources.iInnerRadiusDivisor = (int)GetSettingFloat("Sources", "iDefaultOuterRadius");
+	Sources.iHeatSourceMax = (int)GetSettingFloat("Sources", "iDefaultOuterRadius");
+	Sources.iColdSourceMax = (int)GetSettingFloat("Sources", "iDefaultOuterRadius");
+
+	Breath.fAlphaMultiplier = GetSettingFloat("Breath", "fAlphaMultiplier");
+	Breath.fAlphaMax = GetSettingFloat("Breath", "fAlphaMax");
+
+	FirstPersonBreath.fAlphaMultiplier = GetSettingFloat("FirstPersonBreath", "fAlphaMultiplier");
+	FirstPersonBreath.fAlphaMax = GetSettingFloat("FirstPersonBreath", "fAlphaMax");
+
+	Debug.bEnabled = GetSettingBool("Debug", "bEnabled");
+}
 
 void DataStorage::EraseCache()
 {
@@ -92,7 +102,7 @@ void DataStorage::GarbageCollectCache()
 	}
 }
 
-std::shared_ptr<ActorData> DataStorage::GetOrCreateFromCache(RE::Actor* a_actor)
+std::shared_ptr<DataStorage::ActorData> DataStorage::GetOrCreateFromCache(RE::Actor* a_actor)
 {
 	std::lock_guard<std::shared_mutex> lk(mtx);
 	if (formCache.contains(a_actor->formID)) {
@@ -108,18 +118,13 @@ std::shared_ptr<ActorData> DataStorage::GetOrCreateFromCache(RE::Actor* a_actor)
 	return actordata;
 }
 
-void DataStorage::RegisterEvents()
-{
-	TESFormDeleteEventHandler::Register();
-}
-
 void DataStorage::LoadJSON()
 {
 	std::ifstream i(L"Data\\SKSE\\Plugins\\ColdFX.json");
 	i >> jsonData;
 }
 
-std::shared_ptr<Container> DataStorage::GetContainer(RE::Actor* a_actor)
+std::shared_ptr<DataStorage::Container> DataStorage::GetContainer(RE::Actor* a_actor)
 {
 	if (containerMap.contains(a_actor->GetRace())) {
 		return containerMap[a_actor->GetRace()];
@@ -150,8 +155,6 @@ void DataStorage::LoadData()
 	for (auto& actors : jsonData["Actors"]) {
 		std::shared_ptr<Container> container(new Container);
 		container->Breath = actors["Breathe"] != nullptr ? GetArtObject(actors["Breathe"]) : nullptr;
-		container->BreathFast = actors["BreathFast"] != nullptr ? GetArtObject(actors["BreathFast"]) : nullptr;
-		container->BreathFrigid = actors["BreathFrigid"] != nullptr ? GetArtObject(actors["BreathFrigid"]) : nullptr;
 		container->BreathTwo = actors["BreathTwo"] != nullptr ? GetArtObject(actors["BreathTwo"]) : nullptr;
 		container->TempFrequency = actors["TempFrequency"] != nullptr ? (float)actors["TempFrequency"] : 1.0f;
 		for (auto& race : actors["Races"]) {

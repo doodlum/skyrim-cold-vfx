@@ -4,7 +4,7 @@
 #include "Util.h"
 
 
-void ColdFX::UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData, float a_delta)
+void ColdFX::UpdateActivity(RE::Actor* a_actor, std::shared_ptr<DataStorage::ActorData> a_actorData, float a_delta)
 {
 	float maxActivityLevel;
 
@@ -23,17 +23,17 @@ void ColdFX::UpdateActivity(RE::Actor* a_actor, std::shared_ptr<ActorData> a_act
 	a_actorData->dispersalPercent = std::lerp(a_actorData->dispersalPercent, 1.0f / (maxActivityLevel + (IsTurning(a_actor) * 2.0f)), a_delta) * !IsSubmerged(a_actor);
 }
 
-void ColdFX::UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorData> a_actorData)
+void ColdFX::UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<DataStorage::ActorData> a_actorData)
 {
 	a_actorData->localTemp = 0.0f;
 	auto storage = DataStorage::GetSingleton();
 	for (auto heatSourceData : storage->heatSourceCache) {
 		auto  distance = heatSourceData.position.GetDistance(a_actor->GetPosition());
 		auto  outerRadius = heatSourceData.radius;
-		auto  innerRadius = outerRadius / 3;
+		auto  innerRadius = outerRadius / storage->Sources.iInnerRadiusDivisor;
 		float percentage = std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f);
 		a_actorData->localTemp += heatSourceData.heat * (1 - percentage);
-		if (storage->debugDrawHeatSources && a_actor->IsPlayerRef()) {
+		if (storage->Debug.bEnabled && a_actor->IsPlayerRef()) {
 			DebugDrawHeatSource(heatSourceData.position, innerRadius, outerRadius, heatSourceData.heat, percentage);
 		}
 	}
@@ -42,23 +42,23 @@ void ColdFX::UpdateLocalTemperature(RE::Actor* a_actor, std::shared_ptr<ActorDat
 		auto actorData = form.second;
 		if (actorData->heat != 0) {
 			auto  distance = actorData->heatSourcePosition.GetDistance(a_actor->GetPosition());
-			auto  outerRadius = (float)256;
-			auto  innerRadius = outerRadius / 3;
+			auto  outerRadius = actorData->heatRadius;
+			auto  innerRadius = outerRadius / storage->Sources.iInnerRadiusDivisor;
 			float percentage = std::clamp((distance - innerRadius) / (outerRadius - innerRadius), 0.0f, 1.0f);
 			a_actorData->localTemp += actorData->heat * (1 - percentage);
-			if (storage->debugDrawHeatSources && a_actor->IsPlayerRef()) {
+			if (storage->Debug.bEnabled && a_actor->IsPlayerRef()) {
 				DebugDrawHeatSource(actorData->heatSourcePosition, innerRadius, outerRadius, actorData->heat, percentage);
 			}
 		}
 	}
-	a_actorData->localTemp = min(a_actorData->localTemp, heatSourceMax);
+	a_actorData->localTemp = min(a_actorData->localTemp, storage->Sources.iHeatSourceMax);
 }
 
 void ColdFX::UpdateActor(RE::Actor* a_actor, float a_delta)
 {
 	auto storage = DataStorage::GetSingleton();
 
-	if (storage->debugDrawHeatSources)
+	if (storage->Debug.bEnabled)
 		DebugDrawDamageNodes(a_actor);
 
 	if (a_actor->currentProcess->InHighProcess() && !a_actor->IsGhost() && !a_actor->currentProcess->cachedValues->booleanValues.any(RE::CachedValues::BooleanValue::kOwnerIsUndead)) {
@@ -106,7 +106,7 @@ void ColdFX::UpdateActorEffect(RE::ModelReferenceEffect& a_modelEffect)
 		return;
 	auto storage = DataStorage::GetSingleton();
 	auto actorData = storage->GetOrCreateFromCache(a_modelEffect.controller->GetTargetReference()->As<RE::Actor>());
-	UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), std::clamp(actorData->dispersalPercent * (coldLevel - actorData->localTemp) / 10.0f, 0.0f, 1.0f));
+	UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), std::clamp(actorData->dispersalPercent * (coldLevel - actorData->localTemp) * storage->Breath.fAlphaMultiplier, 0.0f, storage->Breath.fAlphaMax));
 }
 
 void ColdFX::UpdateFirstPersonEffect(RE::ModelReferenceEffect& a_modelEffect)
@@ -115,7 +115,7 @@ void ColdFX::UpdateFirstPersonEffect(RE::ModelReferenceEffect& a_modelEffect)
 		return;
 	auto storage = DataStorage::GetSingleton();
 	auto actorData = storage->GetOrCreateFromCache(a_modelEffect.controller->GetTargetReference()->As<RE::Actor>());
-	UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), std::clamp(actorData->dispersalPercent * (coldLevel - actorData->localTemp) / 20.0f, 0.0f, 1.0f));
+	UpdateEffectMaterialAlpha(a_modelEffect.Get3D(), std::clamp(actorData->dispersalPercent * (coldLevel - actorData->localTemp) * storage->FirstPersonBreath.fAlphaMultiplier, 0.0f, storage->FirstPersonBreath.fAlphaMax));
 }
 
 void ColdFX::UpdateEffects()
@@ -172,8 +172,8 @@ void ColdFX::ScheduleHeatSourceUpdate(float a_delta)
 						if (Survival_WarmUpObjectsList->HasForm(baseObject)) {
 							DataStorage::HeatSourceData heatSourceData;
 							heatSourceData.position = a_ref.GetPosition();
-							heatSourceData.radius = 512;
-							heatSourceData.heat = 5;
+							heatSourceData.radius = (float)storage->Sources.iDefaultOuterRadius;
+							heatSourceData.heat = (float)storage->Sources.iHeatSourceMax;
 							storage->heatSourceCache.insert(storage->heatSourceCache.end(), heatSourceData);
 							return true;
 						} else if (auto hazard = baseObject->As<RE::BGSHazard>()) {
@@ -182,8 +182,8 @@ void ColdFX::ScheduleHeatSourceUpdate(float a_delta)
 									if (effect->baseEffect->data.resistVariable == RE::ActorValue::kResistFire) {
 										DataStorage::HeatSourceData heatSourceData;
 										heatSourceData.position = a_ref.GetPosition();
-										heatSourceData.radius = 384;
-										heatSourceData.heat = heatSourceMax;
+										heatSourceData.radius = 96 * hazard->data.radius;
+										heatSourceData.heat = (float)storage->Sources.iHeatSourceMax;
 										storage->heatSourceCache.insert(storage->heatSourceCache.end(), heatSourceData);
 										break;
 									}
@@ -191,8 +191,8 @@ void ColdFX::ScheduleHeatSourceUpdate(float a_delta)
 									if (effect->baseEffect->data.resistVariable == RE::ActorValue::kResistFrost) {
 										DataStorage::HeatSourceData heatSourceData;
 										heatSourceData.position = a_ref.GetPosition();
-										heatSourceData.radius = 384;
-										heatSourceData.heat = -coldSourceMax;
+										heatSourceData.radius = 96 * hazard->data.radius;
+										heatSourceData.heat = (float)-storage->Sources.iColdSourceMax;
 										storage->heatSourceCache.insert(storage->heatSourceCache.end(), heatSourceData);
 										break;
 									}
@@ -204,7 +204,7 @@ void ColdFX::ScheduleHeatSourceUpdate(float a_delta)
 							actorData->heat = 0;
 							if (auto leftEquipped = actor->GetEquippedObject(true)) {
 								if (leftEquipped->As<RE::TESObjectLIGH>()) {
-									actorData->heat += heatSourceMax;
+									actorData->heat += storage->Sources.iHeatSourceMax;
 								}
 							}
 							if (auto effects = actor->GetActiveEffectList()) {
@@ -213,16 +213,19 @@ void ColdFX::ScheduleHeatSourceUpdate(float a_delta)
 									setting = effect ? effect->GetBaseObject() : nullptr;
 									if (setting) {
 										if (setting->data.resistVariable == RE::ActorValue::kResistFire) {
-											actorData->heat += heatSourceMax;
+											actorData->heat += storage->Sources.iHeatSourceMax;
 											break;
 										} else if (setting->data.resistVariable == RE::ActorValue::kResistFrost) {
-											actorData->heat -= coldSourceMax;
+											actorData->heat -= storage->Sources.iColdSourceMax;
 											break;
 										}
 									}
 								}
 							}
-							actorData->heat = std::clamp(actorData->heat, -coldSourceMax, heatSourceMax);
+							actorData->heat = std::clamp(actorData->heat, (float)-storage->Sources.iColdSourceMax, (float)storage->Sources.iHeatSourceMax);
+							if (actorData->heat != 0) {
+								actorData->heatRadius = ((float)actor->refScale / 100.0f) * actor->GetBoundMin().GetDistance(actor->GetBoundMax()) * 2;
+							}
 						}
 					}
 				}
